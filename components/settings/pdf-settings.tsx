@@ -9,6 +9,7 @@ import { useI18n } from '@/lib/hooks/use-i18n';
 import { useSettingsStore } from '@/lib/store/settings';
 import { PDF_PROVIDERS } from '@/lib/pdf/constants';
 import type { PDFProviderId } from '@/lib/pdf/types';
+import { getFormatLabelsForProviders } from '@/lib/document/mime';
 import { CheckCircle2, Eye, EyeOff, Loader2, Zap, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -278,6 +279,19 @@ export function PDFSettings({ selectedProviderId }: PDFSettingsProps) {
           })()}
         </>
       )}
+
+      {/* Supported Formats */}
+      <div className="space-y-2">
+        <Label className="text-sm">{t('settings.supportedFormats')}</Label>
+        <div className="flex flex-wrap gap-2">
+          {getFormatLabelsForProviders([selectedProviderId]).map((format) => (
+            <Badge key={format} variant="secondary" className="font-normal">
+              <CheckCircle2 className="h-3 w-3 mr-1" />
+              {format}
+            </Badge>
+          ))}
+        </div>
+      </div>
 
       {/* Features List */}
       <div className="space-y-2">

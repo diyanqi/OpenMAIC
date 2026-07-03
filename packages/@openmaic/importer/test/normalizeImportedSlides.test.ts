@@ -26,19 +26,18 @@ describe('normalizeImportedSlides', () => {
     });
   });
 
-  it('passes well-formed elements through untouched', () => {
+  it("preserves a shape's explicit empty fill — the transform emits '' for gradient / image-filled / unfilled shapes", () => {
     const el = {
       ...box,
-      type: 'text',
-      content: '<p>hi</p>',
-      defaultFontName: 'Themed Font',
-      defaultColor: '#123456',
+      type: 'shape',
+      viewBox: [200, 200],
+      path: 'M 0 0 L 200 0 L 200 200 L 0 200 Z',
+      fill: '',
+      gradient: { type: 'linear', colors: [], rotate: 90 },
+      fixedRatio: false,
     };
     const [slide] = normalizeImportedSlides([baseSlide([el])]);
-    expect(slide.elements[0]).toMatchObject({
-      defaultFontName: 'Themed Font',
-      defaultColor: '#123456',
-    });
+    expect(slide.elements[0]).toMatchObject({ type: 'shape', fill: '' });
   });
 
   it('drops an element normalization cannot repair, keeps the rest, and warns', () => {
@@ -65,7 +64,7 @@ describe('normalizeImportedSlides', () => {
 });
 
 describe('parsedToSlides · normalize boundary', () => {
-  it('emits slides whose elements satisfy the contract defaults end to end', async () => {
+  it("keeps an unfilled shape transparent end to end — the boundary must not default the transform's fill: ''", async () => {
     const json = {
       size: { width: 960, height: 540 },
       themeColors: [],
@@ -76,22 +75,27 @@ describe('parsedToSlides · normalize boundary', () => {
           layoutElements: [],
           elements: [
             {
-              type: 'text',
+              type: 'shape',
+              shapType: 'rect',
               left: 100,
               top: 100,
-              width: 400,
-              height: 60,
-              name: 'title',
+              width: 200,
+              height: 120,
+              name: 'unfilled box',
               order: 1,
               rotate: 0,
-              content: '<div><p><span>hello</span></p></div>',
-              fill: { type: 'color', value: 'transparent' },
+              content: '<div></div>',
+              // no `fill` → the transform emits the DSL shape with fill: ''
+              // (meaning transparent / no solid fill; the renderer maps '' to
+              // `none`). Regression test: the normalize boundary must pass that
+              // through instead of painting it with the contract default.
               borderWidth: 0,
               borderColor: '#000000',
               borderType: 'solid',
               borderStrokeDasharray: '0',
-              isVertical: false,
-              vAlign: 'up',
+              vAlign: 'mid',
+              isFlipH: false,
+              isFlipV: false,
             },
           ],
         },
@@ -100,11 +104,8 @@ describe('parsedToSlides · normalize boundary', () => {
 
     const slides = await parsedToSlides(json as unknown as Parameters<typeof parsedToSlides>[0]);
     expect(slides).toHaveLength(1);
-    const [text] = slides[0].elements;
-    expect(text.type).toBe('text');
-    // The transform fills these from the deck theme; the boundary guarantees
-    // they are present either way.
-    expect(text).toHaveProperty('defaultFontName');
-    expect(text).toHaveProperty('defaultColor');
+    const [shape] = slides[0].elements;
+    expect(shape.type).toBe('shape');
+    expect((shape as { fill?: string }).fill).toBe('');
   });
 });

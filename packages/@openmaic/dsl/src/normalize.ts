@@ -128,6 +128,18 @@ function str(el: Raw, field: string, def: string): string {
   return v;
 }
 
+/**
+ * Fill a required string field where the empty string is a meaningful value
+ * (e.g. a shape's `fill`, where `''` means "no solid fill"). Only `undefined`
+ * is absent; a present non-string is a producer bug: fail loud.
+ */
+function strKeepEmpty(el: Raw, field: string, def: string): string {
+  const v = el[field];
+  if (v === undefined) return def;
+  if (typeof v !== 'string') fail(el, field, 'a string');
+  return v;
+}
+
 /** Fill a required boolean field. Only `undefined` is absent — `false` stays `false`. */
 function bool(el: Raw, field: string, def: boolean): boolean {
   const v = el[field];
@@ -189,7 +201,12 @@ function normalizeShape(el: Raw): PPTShapeElement {
     ...el,
     viewBox: pair(el, 'viewBox', () => [geom(el, 'width'), geom(el, 'height')]),
     path: strOrDerive(el, 'path', () => rectPath(geom(el, 'width'), geom(el, 'height'))),
-    fill: str(el, 'fill', ELEMENT_DEFAULTS.shape.fill),
+    // `fill` keeps an explicit `''`: unlike an empty font name, the empty string
+    // is a *meaningful* fill — "no solid fill" (transparent, or gradient/pattern
+    // carried by the sibling fields) — and the renderer maps it to `none`.
+    // Producers emit it deliberately (the importer for gradient / image-filled /
+    // unfilled shapes), so only a truly absent field gets the default.
+    fill: strKeepEmpty(el, 'fill', ELEMENT_DEFAULTS.shape.fill),
     fixedRatio: bool(el, 'fixedRatio', ELEMENT_DEFAULTS.shape.fixedRatio),
     ...(el.text !== undefined ? { text: normalizeShapeText(el) } : {}),
   } as PPTShapeElement;
@@ -300,14 +317,45 @@ export function normalizeElement(el: unknown): PPTElement {
 }
 
 /**
+ * Element-invalidity policy for {@link normalizeSlide}.
+ *
+ * `normalizeElement` fails loud on a present-but-wrong-typed field. What that
+ * should do to the *slide* is a producer decision: a build-time producer wants
+ * the throw (`'throw'`, the default); a producer normalizing unreliable
+ * wild-world input (an imported deck, model output) prefers to degrade — drop
+ * the one element rather than fail the whole document or hand the malformed
+ * payload to consumers that read it unguarded (`'drop'`). `onDropped` observes
+ * each drop (log it, count it, surface it) so the loss is never silent.
+ */
+export interface NormalizeSlideOptions {
+  onInvalid?: 'throw' | 'drop';
+  onDropped?: (element: unknown, error: unknown) => void;
+}
+
+/**
  * Normalize every element on a slide-like canvas (a {@link Slide} or a
  * whiteboard — anything carrying an `elements` array). Pure; returns a fresh
- * object with normalized elements.
+ * object with normalized elements. See {@link NormalizeSlideOptions} for what
+ * happens to an element that fails normalization.
  */
-export function normalizeSlide<T extends { elements: PPTElement[] }>(slide: T): T {
-  // Spread + override is a structurally-identical `T`; TS can't prove that for a
-  // generic, so the single localized cast stands in for the invariant.
-  return { ...slide, elements: slide.elements.map(normalizeElement) } as T;
+export function normalizeSlide<T extends { elements: PPTElement[] }>(
+  slide: T,
+  options?: NormalizeSlideOptions,
+): T {
+  if (options?.onInvalid !== 'drop') {
+    // Spread + override is a structurally-identical `T`; TS can't prove that for a
+    // generic, so the single localized cast stands in for the invariant.
+    return { ...slide, elements: slide.elements.map(normalizeElement) } as T;
+  }
+  const elements: PPTElement[] = [];
+  for (const el of slide.elements) {
+    try {
+      elements.push(normalizeElement(el));
+    } catch (error) {
+      options.onDropped?.(el, error);
+    }
+  }
+  return { ...slide, elements } as T;
 }
 
 /**
@@ -320,7 +368,9 @@ export function normalizeSlide<T extends { elements: PPTElement[] }>(slide: T): 
 export function normalizeScene<TAction, TContent extends { type: SceneType }>(
   scene: Scene<TAction, TContent>,
 ): Scene<TAction, TContent> {
-  const whiteboards = scene.whiteboards?.map(normalizeSlide);
+  // Not `.map(normalizeSlide)` — map's index argument would land in the options
+  // parameter.
+  const whiteboards = scene.whiteboards?.map((wb) => normalizeSlide(wb));
   let next: Scene<TAction, TContent> = whiteboards ? { ...scene, whiteboards } : { ...scene };
   if (isSlideContent(scene.content)) {
     // Spread + override yields a structurally-identical scene; TS can't prove
@@ -342,5 +392,5 @@ export function normalizeScene<TAction, TContent extends { type: SceneType }>(
  */
 export function normalizeStage(stage: Stage): Stage {
   if (!stage.whiteboard) return { ...stage };
-  return { ...stage, whiteboard: stage.whiteboard.map(normalizeSlide) };
+  return { ...stage, whiteboard: stage.whiteboard.map((wb) => normalizeSlide(wb)) };
 }

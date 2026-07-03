@@ -74,6 +74,17 @@ describe('normalizeElement — static defaults', () => {
     expect(out.fixedRatio).toBe(false);
   });
 
+  it("keeps a shape's explicit empty fill — '' means no solid fill, not absent", () => {
+    // Producers emit `fill: ''` deliberately (the importer for gradient /
+    // image-filled / unfilled shapes); the renderer maps it to `none`.
+    // Defaulting it would paint transparent shapes with the canonical color.
+    const shape = normalizeElement({ ...box, type: 'shape', fill: '' }) as Extract<
+      PPTElement,
+      { type: 'shape' }
+    >;
+    expect(shape.fill).toBe('');
+  });
+
   it('fills a present-but-empty shape text overlay (consumers read text.content unguarded)', () => {
     const out = normalizeElement({ ...box, type: 'shape', text: {} }) as Extract<
       PPTElement,
@@ -263,6 +274,31 @@ describe('document-level walkers', () => {
     expect((out.elements[0] as Extract<PPTElement, { type: 'text' }>).defaultFontName).toBe(
       ELEMENT_DEFAULTS.text.defaultFontName,
     );
+  });
+
+  it('normalizeSlide throws on a malformed element by default', () => {
+    const bad = { ...box, type: 'text', defaultColor: 123 } as unknown as PPTElement;
+    expect(() => normalizeSlide(slide([bad]))).toThrow(/defaultColor/);
+  });
+
+  it("normalizeSlide with onInvalid: 'drop' drops the malformed element, keeps the rest, and reports it", () => {
+    const bad = { ...box, id: 'bad', type: 'text', defaultColor: 123 } as unknown as PPTElement;
+    const dropped: Array<{ element: unknown; error: unknown }> = [];
+    const out = normalizeSlide(slide([bareText, bad]), {
+      onInvalid: 'drop',
+      onDropped: (element, error) => dropped.push({ element, error }),
+    });
+    expect(out.elements).toHaveLength(1);
+    expect(out.elements[0].id).toBe(box.id);
+    expect(dropped).toHaveLength(1);
+    expect((dropped[0].element as { id: string }).id).toBe('bad');
+    expect(String(dropped[0].error)).toMatch(/defaultColor/);
+  });
+
+  it("normalizeSlide with onInvalid: 'drop' but no onDropped drops without throwing", () => {
+    const bad = { ...box, type: 'text', defaultColor: 123 } as unknown as PPTElement;
+    expect(() => normalizeSlide(slide([bad]), { onInvalid: 'drop' })).not.toThrow();
+    expect(normalizeSlide(slide([bad]), { onInvalid: 'drop' }).elements).toHaveLength(0);
   });
 
   it('normalizeScene normalizes a slide scene canvas + whiteboards', () => {

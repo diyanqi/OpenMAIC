@@ -15,7 +15,7 @@
  * `Promise.allSettled` here so a missing inner `.catch` cannot fail the
  * whole import either.
  */
-import type { Slide } from '@openmaic/dsl';
+import { normalizeElement, type Slide } from '@openmaic/dsl';
 import type { Output } from '../adapter/types';
 import { parseZip } from '../parser/ZipParser';
 import { buildPresentation } from '../model/Presentation';
@@ -75,10 +75,41 @@ export async function parsedToSlides(
 
   await Promise.allSettled(uploadTasks);
 
-  // `transformParsedToSlides` already emits complete DSL `Slide` objects
-  // (viewportSize / viewportRatio / theme are filled at construction), so the
-  // result is a ready-to-render `Slide[]` with no post-processing.
-  return slides;
+  // `transformParsedToSlides` emits complete DSL `Slide` objects (viewportSize /
+  // viewportRatio / theme are filled at construction); the contract's
+  // `normalize` pass at this output boundary is the safety net for anything the
+  // transform missed on an exotic deck, mirroring the generator's wiring.
+  return normalizeImportedSlides(slides);
+}
+
+/**
+ * Contract boundary: run the DSL's element normalization over the transform
+ * output before handing slides to consumers.
+ *
+ * `normalizeElement` fills any required content field the transform left off,
+ * derives geometry-dependent fields, and throws on a present-but-wrong-typed
+ * field. The transform is deterministic, but its input is the wild-world .pptx
+ * corpus — so, matching the importer's degrade-not-fail policy (see the upload
+ * failure policy above), an element normalization cannot repair is dropped with
+ * a warning rather than failing the whole import or reaching consumers that
+ * read it unguarded.
+ */
+export function normalizeImportedSlides(slides: Slide[]): Slide[] {
+  return slides.map((slide) => ({
+    ...slide,
+    elements: slide.elements.flatMap((el) => {
+      try {
+        return [normalizeElement(el)];
+      } catch (err) {
+        console.warn(
+          `[@openmaic/importer] dropping element that fails DSL normalization: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+        return [];
+      }
+    }),
+  }));
 }
 
 /**

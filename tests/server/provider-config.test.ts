@@ -102,6 +102,16 @@ describe('provider-config', () => {
       expect(resolveApiKey('openai')).toBe('sk-server');
     });
 
+    it('round-robins multiple server keys from OPENAI_API_KEY', async () => {
+      vi.stubEnv('OPENAI_API_KEY', 'sk-one, sk-two, sk-three');
+      const { resolveApiKey } = await import('@/lib/server/provider-config');
+
+      expect(resolveApiKey('openai')).toBe('sk-one');
+      expect(resolveApiKey('openai')).toBe('sk-two');
+      expect(resolveApiKey('openai')).toBe('sk-three');
+      expect(resolveApiKey('openai')).toBe('sk-one');
+    });
+
     it('returns empty string when neither client nor server key exists', async () => {
       const { resolveApiKey } = await import('@/lib/server/provider-config');
       expect(resolveApiKey('openai')).toBe('');
@@ -423,6 +433,15 @@ pdf:
       expect(providers['openai-image']).toEqual({});
       expect(resolveImageApiKey('openai-image')).toBe('sk-openai');
       expect(resolveImageBaseUrl('openai-image')).toBe('https://proxy.example.com/v1');
+    });
+
+    it('round-robins multiple keys for OpenAI image fallback too', async () => {
+      vi.stubEnv('OPENAI_API_KEY', 'sk-image-1\nsk-image-2');
+      const { resolveImageApiKey } = await import('@/lib/server/provider-config');
+
+      expect(resolveImageApiKey('openai-image')).toBe('sk-image-1');
+      expect(resolveImageApiKey('openai-image')).toBe('sk-image-2');
+      expect(resolveImageApiKey('openai-image')).toBe('sk-image-1');
     });
 
     it('maps IMAGE_OPENAI and exposes image baseUrl', async () => {

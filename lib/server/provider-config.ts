@@ -18,6 +18,7 @@ const log = createLogger('ServerProviderConfig');
 
 interface ServerProviderEntry {
   apiKey: string;
+  apiKeys?: string[];
   baseUrl?: string;
   models?: string[];
   proxy?: string;
@@ -188,6 +189,7 @@ function loadEnvSection(
       ) {
         result[id] = {
           apiKey: entry.apiKey || '',
+          apiKeys: entry.apiKeys,
           baseUrl: entry.baseUrl,
           models: entry.models,
           proxy: entry.proxy,
@@ -198,7 +200,7 @@ function loadEnvSection(
 
   // Then, apply env vars (env takes priority over YAML)
   for (const [prefix, providerId] of Object.entries(envMap)) {
-    const envApiKey = process.env[`${prefix}_API_KEY`] || undefined;
+    const envApiKey = parseRotatingApiKeys(process.env[`${prefix}_API_KEY`] || undefined);
     const envBaseUrl = process.env[`${prefix}_BASE_URL`] || undefined;
     const envModelsStr = process.env[`${prefix}_MODELS`];
     const envModels = envModelsStr
@@ -210,7 +212,10 @@ function loadEnvSection(
 
     if (result[providerId]) {
       // YAML entry exists — env vars override individual fields
-      if (envApiKey) result[providerId].apiKey = envApiKey;
+      if (envApiKey) {
+        result[providerId].apiKey = envApiKey[0] || '';
+        result[providerId].apiKeys = envApiKey;
+      }
       if (envBaseUrl) result[providerId].baseUrl = envBaseUrl;
       if (envModels) result[providerId].models = envModels;
       continue;
@@ -220,11 +225,12 @@ function loadEnvSection(
     if (
       requiresBaseUrlForProvider(providerId)
         ? !envBaseUrl
-        : !(envApiKey || (envBaseUrl && keylessProviders.has(providerId)))
+        : !(envApiKey?.length || (envBaseUrl && keylessProviders.has(providerId)))
     )
       continue;
     result[providerId] = {
-      apiKey: envApiKey || '',
+      apiKey: envApiKey?.[0] || '',
+      apiKeys: envApiKey,
       baseUrl: envBaseUrl,
       models: envModels,
     };
@@ -273,6 +279,25 @@ const OPENAI_IMAGE_PROVIDER_ID = 'openai-image';
 
 /** Cache keyed by YAML filename (empty string = default file). */
 const _configs: Map<string, ServerConfig> = new Map();
+const _apiKeyRotationIndices: Map<string, number> = new Map();
+
+function parseRotatingApiKeys(raw: string | undefined): string[] | undefined {
+  if (!raw) return undefined;
+  const apiKeys = raw
+    .split(/[\n,;]/)
+    .map((key) => key.trim())
+    .filter(Boolean);
+  return apiKeys.length > 0 ? apiKeys : undefined;
+}
+
+function pickRotatingApiKey(providerId: string, apiKeys: string[]): string {
+  if (apiKeys.length === 0) return '';
+  if (apiKeys.length === 1) return apiKeys[0];
+
+  const currentIndex = _apiKeyRotationIndices.get(providerId) ?? 0;
+  _apiKeyRotationIndices.set(providerId, (currentIndex + 1) % apiKeys.length);
+  return apiKeys[currentIndex];
+}
 
 function applyOpenAIImageFallback(
   imageConfig: Record<string, ServerProviderEntry>,
@@ -282,10 +307,13 @@ function applyOpenAIImageFallback(
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return imageConfig;
+  const apiKeys = parseRotatingApiKeys(apiKey);
+  if (!apiKeys) return imageConfig;
 
   const yamlOpenAIImage = yamlImageSection?.[OPENAI_IMAGE_PROVIDER_ID];
   imageConfig[OPENAI_IMAGE_PROVIDER_ID] = {
-    apiKey,
+    apiKey: apiKeys[0],
+    apiKeys,
     baseUrl:
       yamlOpenAIImage?.baseUrl || process.env.IMAGE_OPENAI_BASE_URL || process.env.OPENAI_BASE_URL,
     models: yamlOpenAIImage?.models,
@@ -376,7 +404,12 @@ function resolveSectionApiKey(
   clientKey?: string,
 ): string {
   const entry = getConfig()[section][providerId];
-  if (entry) return entry.apiKey || ''; // managed: server key is authoritative
+  if (entry) {
+    if (entry.apiKeys && entry.apiKeys.length > 0) {
+      return pickRotatingApiKey(providerId, entry.apiKeys);
+    }
+    return entry.apiKey || ''; // managed: server key is authoritative
+  }
   return clientKey || ''; // unmanaged: client-supplied key only
 }
 

@@ -7,6 +7,7 @@ import {
   normalizeInkcraftUser,
   normalizeReturnTo,
   resolveOAuthRedirectUri,
+  resolvePublicOrigin,
 } from '@/lib/server/inkcraft-oauth';
 import {
   createOAuthSessionToken,
@@ -129,7 +130,7 @@ export async function GET(req: NextRequest) {
     const returnTo = normalizeReturnTo(
       req.cookies.get(INKCRAFT_OAUTH_RETURN_TO_COOKIE)?.value ?? null,
     );
-    const response = NextResponse.redirect(new URL(returnTo, req.nextUrl.origin));
+    const response = NextResponse.redirect(new URL(returnTo, resolvePublicOrigin(req)));
 
     clearOAuthHandshakeCookies(response);
     response.cookies.set(OAUTH_SESSION_COOKIE, sessionToken, {
@@ -141,7 +142,7 @@ export async function GET(req: NextRequest) {
     });
     return response;
   } catch (err) {
-    const response = NextResponse.redirect(new URL('/api/auth/login', req.nextUrl.origin));
+    const response = NextResponse.redirect(new URL('/api/auth/login', resolvePublicOrigin(req)));
     clearOAuthHandshakeCookies(response);
     response.cookies.set(OAUTH_SESSION_COOKIE, '', { path: '/', maxAge: 0 });
     response.headers.set('x-openmaic-auth-error', err instanceof Error ? err.message : String(err));

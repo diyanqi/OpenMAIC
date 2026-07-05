@@ -5,11 +5,12 @@ MAIC browser users authenticate through Inkcraft OAuth. If a user opens MAIC wit
 ## MAIC Environment
 
 ```bash
-INKCRAFT_OAUTH_BASE_URL=https://www.inckraft.cn
+INKCRAFT_OAUTH_BASE_URL=https://www.inkcraft.cn
 INKCRAFT_OAUTH_CLIENT_ID=...
 INKCRAFT_OAUTH_CLIENT_SECRET=...
 INKCRAFT_OAUTH_SESSION_SECRET=...
 INKCRAFT_INTEGRATION_SECRET=...
+MAIC_PUBLIC_URL=https://<maic-host>
 DEFAULT_MODEL=...
 ```
 
@@ -18,6 +19,10 @@ Register this OAuth redirect URI in Inkcraft:
 ```text
 https://<maic-host>/api/auth/callback
 ```
+
+If the server is bound to `0.0.0.0` or sits behind a reverse proxy, set either
+`MAIC_PUBLIC_URL` or the exact `INKCRAFT_OAUTH_REDIRECT_URI` so OAuth callbacks
+and post-login redirects use the public MAIC host.
 
 OAuth endpoints used by MAIC:
 

@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 
 export const INKCRAFT_OAUTH_BASE_URL =
-  process.env.INKCRAFT_OAUTH_BASE_URL?.replace(/\/+$/, '') || 'https://www.inckraft.cn';
+  process.env.INKCRAFT_OAUTH_BASE_URL?.replace(/\/+$/, '') || 'https://www.inkcraft.cn';
 export const INKCRAFT_OAUTH_STATE_COOKIE = 'openmaic_oauth_state';
 export const INKCRAFT_OAUTH_VERIFIER_COOKIE = 'openmaic_oauth_verifier';
 export const INKCRAFT_OAUTH_RETURN_TO_COOKIE = 'openmaic_oauth_return_to';
@@ -39,8 +39,55 @@ export function getInkcraftOAuthConfig(): InkcraftOAuthConfig | null {
   };
 }
 
+function firstHeaderValue(value: string | null): string | null {
+  return value?.split(',')[0]?.trim() || null;
+}
+
+function hasUnroutableHostname(origin: string): boolean {
+  try {
+    const { hostname } = new URL(origin);
+    return hostname === '0.0.0.0' || hostname === '::' || hostname === '[::]';
+  } catch {
+    return true;
+  }
+}
+
+export function resolvePublicOrigin(req: NextRequest): string {
+  const configuredRedirectUri = process.env.INKCRAFT_OAUTH_REDIRECT_URI;
+  if (configuredRedirectUri) {
+    return new URL(configuredRedirectUri).origin;
+  }
+
+  const publicUrl = process.env.MAIC_PUBLIC_URL || process.env.NEXT_PUBLIC_APP_URL;
+  if (publicUrl) {
+    return new URL(publicUrl).origin;
+  }
+
+  const forwardedHost = firstHeaderValue(req.headers.get('x-forwarded-host'));
+  if (forwardedHost) {
+    const proto = firstHeaderValue(req.headers.get('x-forwarded-proto')) || 'https';
+    const origin = `${proto}://${forwardedHost}`;
+    if (!hasUnroutableHostname(origin)) return origin;
+  }
+
+  const host = firstHeaderValue(req.headers.get('host'));
+  if (host) {
+    const proto =
+      firstHeaderValue(req.headers.get('x-forwarded-proto')) ||
+      (host.startsWith('localhost') || host.startsWith('127.0.0.1') ? 'http' : 'https');
+    const origin = `${proto}://${host}`;
+    if (!hasUnroutableHostname(origin)) return origin;
+  }
+
+  if (!hasUnroutableHostname(req.nextUrl.origin)) {
+    return req.nextUrl.origin;
+  }
+
+  return 'http://localhost:3000';
+}
+
 export function resolveOAuthRedirectUri(req: NextRequest): string {
-  return process.env.INKCRAFT_OAUTH_REDIRECT_URI || `${req.nextUrl.origin}/api/auth/callback`;
+  return `${resolvePublicOrigin(req)}/api/auth/callback`;
 }
 
 export function normalizeReturnTo(value: string | null): string {

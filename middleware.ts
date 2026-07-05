@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { OAUTH_SESSION_COOKIE, verifyOAuthSessionToken } from '@/lib/server/oauth-session';
 
 /** Convert string to Uint8Array */
 function encode(str: string): Uint8Array {
@@ -41,16 +42,76 @@ async function verifyToken(token: string, accessCode: string): Promise<boolean> 
   return mismatch === 0;
 }
 
+function isPublicAsset(pathname: string): boolean {
+  const looksLikePublicFile = !pathname.startsWith('/api/') && /\.[a-zA-Z0-9]+$/.test(pathname);
+  return (
+    pathname.startsWith('/_next/') ||
+    pathname.startsWith('/logos/') ||
+    pathname.startsWith('/avatars/') ||
+    pathname === '/favicon.ico' ||
+    pathname === '/apple-icon.png' ||
+    pathname === '/logo-horizontal.png' ||
+    pathname === '/openmaic-mark.png' ||
+    looksLikePublicFile
+  );
+}
+
+function isAuthBypassPath(pathname: string): boolean {
+  return (
+    pathname.startsWith('/api/auth/') ||
+    pathname.startsWith('/api/access-code/') ||
+    pathname.startsWith('/api/inkcraft/') ||
+    pathname.startsWith('/api/integrations/inkcraft/') ||
+    pathname === '/api/health'
+  );
+}
+
+function buildLoginUrl(request: NextRequest): URL {
+  const loginUrl = new URL('/api/auth/login', request.url);
+  loginUrl.searchParams.set('returnTo', `${request.nextUrl.pathname}${request.nextUrl.search}`);
+  return loginUrl;
+}
+
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  if (isPublicAsset(pathname)) {
+    return NextResponse.next();
+  }
+
+  const oauthEnabled =
+    process.env.INKCRAFT_OAUTH_DISABLED !== 'true' && !!process.env.INKCRAFT_OAUTH_CLIENT_ID;
+  const authBypass = isAuthBypassPath(pathname);
+
+  if (oauthEnabled && !authBypass) {
+    const sessionCookie = request.cookies.get(OAUTH_SESSION_COOKIE)?.value;
+    const hasOAuthSession =
+      !!sessionCookie && !!(await verifyOAuthSessionToken(sessionCookie));
+
+    if (!hasOAuthSession) {
+      const loginUrl = buildLoginUrl(request);
+      if (pathname.startsWith('/api/')) {
+        return NextResponse.json(
+          {
+            success: false,
+            errorCode: 'INVALID_REQUEST',
+            error: 'Authentication required',
+            loginUrl: loginUrl.toString(),
+          },
+          { status: 401 },
+        );
+      }
+      return NextResponse.redirect(loginUrl);
+    }
+  }
+
   const accessCode = process.env.ACCESS_CODE;
   if (!accessCode) {
     return NextResponse.next();
   }
 
-  const { pathname } = request.nextUrl;
-
-  // Whitelist: access-code endpoints, health check
-  if (pathname.startsWith('/api/access-code/') || pathname === '/api/health') {
+  // Whitelist: auth/access-code endpoints, Inkcraft server integration, health check.
+  if (authBypass) {
     return NextResponse.next();
   }
 

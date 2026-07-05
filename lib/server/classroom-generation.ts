@@ -39,6 +39,9 @@ const log = createLogger('Classroom');
 
 export interface GenerateClassroomInput {
   requirement: string;
+  userNickname?: string;
+  userId?: string;
+  source?: string;
   pdfContent?: { text: string; images: string[] };
   enableWebSearch?: boolean;
   webSearchProviderId?: WebSearchProviderId;
@@ -260,6 +263,7 @@ export async function generateClassroom(
 
   const requirements: UserRequirements = {
     requirement,
+    ...(input.userNickname ? { userNickname: input.userNickname } : {}),
   };
   const vocationalActive = resolveVocationalActive(requirements);
   const pdfText = pdfContent?.text || undefined;
@@ -382,7 +386,7 @@ export async function generateClassroom(
   const stage: Stage = {
     id: stageId,
     name: courseTitle || outlines[0]?.title || requirement.slice(0, 50),
-    description: undefined,
+    description: input.source === 'inkcraft' ? 'Created from Inkcraft' : undefined,
     languageDirective,
     videoManifest: buildVideoManifestFromOutlines(outlines),
     style: 'interactive',

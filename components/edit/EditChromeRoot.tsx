@@ -17,6 +17,7 @@ interface EditChromeRootProps {
   readonly scene: Scene;
   readonly isEditable: boolean;
   readonly onToggleEditMode?: () => void;
+  readonly settingsEnabled?: boolean;
 }
 
 /**
@@ -40,7 +41,12 @@ interface EditChromeRootProps {
  * `scene` is required (non-null). The parent gates mounting on
  * `mode === 'edit' && currentScene` to satisfy this contract.
  */
-export function EditChromeRoot({ scene, isEditable, onToggleEditMode }: EditChromeRootProps) {
+export function EditChromeRoot({
+  scene,
+  isEditable,
+  onToggleEditMode,
+  settingsEnabled,
+}: EditChromeRootProps) {
   // Mark the body while edit mode is mounted, so the editor-scoped CSS
   // rule in globals.css that pins `body.padding-right` to 0 only fires
   // in Pro mode — not on non-editor pages where Radix's
@@ -91,6 +97,7 @@ export function EditChromeRoot({ scene, isEditable, onToggleEditMode }: EditChro
       mode="edit"
       canEdit={isEditable}
       onToggleEditMode={isMaicEditorEnabled() ? onToggleEditMode : undefined}
+      settingsEnabled={settingsEnabled}
     />
   );
 

@@ -1,7 +1,8 @@
 'use client';
 
-import { useRef, useState, useLayoutEffect } from 'react';
+import { useRef, useState, useLayoutEffect, useMemo } from 'react';
 import type { PPTLatexElement } from '@openmaic/dsl';
+import { renderLatexElementHtml } from '../../../utils/latex';
 
 export { BaseLatexElement } from './BaseLatexElement';
 
@@ -15,6 +16,11 @@ export interface LatexElementProps {
  * Renders KaTeX HTML if available, falls back to legacy SVG path.
  */
 export function LatexElement({ elementInfo, selectElement }: LatexElementProps) {
+  const html = useMemo(
+    () => elementInfo.html || renderLatexElementHtml(elementInfo.latex),
+    [elementInfo.html, elementInfo.latex],
+  );
+
   const handleSelectElement = (e: React.MouseEvent | React.TouchEvent) => {
     if (elementInfo.lock) return;
     e.stopPropagation();
@@ -39,12 +45,13 @@ export function LatexElement({ elementInfo, selectElement }: LatexElementProps) 
           className={`element-content relative w-full h-full ${
             elementInfo.lock ? 'cursor-default' : 'cursor-move'
           }`}
+          style={elementInfo.color ? { color: elementInfo.color } : undefined}
           onMouseDown={handleSelectElement}
           onTouchStart={handleSelectElement}
         >
-          {elementInfo.html ? (
+          {html ? (
             <KatexContent
-              html={elementInfo.html}
+              html={html}
               width={elementInfo.width}
               height={elementInfo.height}
             />

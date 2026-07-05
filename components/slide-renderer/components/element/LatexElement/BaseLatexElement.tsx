@@ -1,7 +1,8 @@
 'use client';
 
-import { useRef, useState, useLayoutEffect } from 'react';
+import { useRef, useState, useLayoutEffect, useMemo } from 'react';
 import type { PPTLatexElement } from '@openmaic/dsl';
+import { renderLatexElementHtml } from '../../../utils/latex';
 
 export interface BaseLatexElementProps {
   elementInfo: PPTLatexElement;
@@ -12,6 +13,11 @@ export interface BaseLatexElementProps {
  * Renders KaTeX HTML if available, falls back to legacy SVG path.
  */
 export function BaseLatexElement({ elementInfo }: BaseLatexElementProps) {
+  const html = useMemo(
+    () => elementInfo.html || renderLatexElementHtml(elementInfo.latex),
+    [elementInfo.html, elementInfo.latex],
+  );
+
   return (
     <div
       className="base-element-latex absolute"
@@ -26,10 +32,13 @@ export function BaseLatexElement({ elementInfo }: BaseLatexElementProps) {
         className="rotate-wrapper w-full h-full"
         style={{ transform: `rotate(${elementInfo.rotate}deg)` }}
       >
-        <div className="element-content relative w-full h-full">
-          {elementInfo.html ? (
+        <div
+          className="element-content relative w-full h-full"
+          style={elementInfo.color ? { color: elementInfo.color } : undefined}
+        >
+          {html ? (
             <KatexContent
-              html={elementInfo.html}
+              html={html}
               width={elementInfo.width}
               height={elementInfo.height}
               align={elementInfo.align}

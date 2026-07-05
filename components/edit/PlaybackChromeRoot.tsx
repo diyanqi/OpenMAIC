@@ -60,6 +60,7 @@ interface PlaybackChromeRootProps {
   readonly canEnterProMode?: boolean;
   /** Pro Switch click handler — parent coordinates editLock + teardown. */
   readonly onEnterProMode?: () => void;
+  readonly settingsEnabled?: boolean;
 }
 
 /**
@@ -70,7 +71,10 @@ interface PlaybackChromeRootProps {
  * the engine wind down cleanly.
  */
 export const PlaybackChromeRoot = forwardRef<PlaybackChromeRootHandle, PlaybackChromeRootProps>(
-  function PlaybackChromeRoot({ onRetryOutline, canEnterProMode, onEnterProMode }, ref) {
+  function PlaybackChromeRoot(
+    { onRetryOutline, canEnterProMode, onEnterProMode, settingsEnabled },
+    ref,
+  ) {
     const { t } = useI18n();
     const {
       mode,
@@ -1058,6 +1062,7 @@ export const PlaybackChromeRoot = forwardRef<PlaybackChromeRootHandle, PlaybackC
               mode={mode}
               canEdit={!!canEnterProMode}
               onToggleEditMode={onEnterProMode}
+              settingsEnabled={settingsEnabled}
             />
           )}
 

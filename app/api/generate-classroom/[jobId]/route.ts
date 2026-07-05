@@ -26,7 +26,14 @@ export async function GET(req: NextRequest, context: { params: Promise<{ jobId: 
       return apiError('INVALID_REQUEST', 404, 'Classroom generation job not found');
     }
 
-    const pollUrl = `${buildRequestOrigin(req)}/api/generate-classroom/${jobId}`;
+    const origin = buildRequestOrigin(req);
+    const pollUrl = `${origin}/api/generate-classroom/${jobId}`;
+    const result = job.result
+      ? {
+          ...job.result,
+          url: `${origin}/classroom/${job.result.classroomId}`,
+        }
+      : undefined;
 
     return apiSuccess({
       jobId: job.id,
@@ -38,7 +45,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ jobId: 
       pollIntervalMs: 5000,
       scenesGenerated: job.scenesGenerated,
       totalScenes: job.totalScenes,
-      result: job.result,
+      result,
       error: job.error,
       done: job.status === 'succeeded' || job.status === 'failed',
     });

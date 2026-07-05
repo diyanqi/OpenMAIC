@@ -32,8 +32,10 @@ import { preloadEditor } from '@/lib/edit/preload-editor';
  */
 export function Stage({
   onRetryOutline,
+  settingsEnabled = true,
 }: {
   onRetryOutline?: (outlineId: string) => Promise<void>;
+  settingsEnabled?: boolean;
 }) {
   const { mode, setMode, scenes, currentSceneId, generatingOutlines, stage } = useStageStore();
   const currentScene = useStageStore((s) => s.getCurrentScene());
@@ -134,6 +136,7 @@ export function Stage({
               scene={currentScene}
               isEditable={isEditable}
               onToggleEditMode={toggleHandler}
+              settingsEnabled={settingsEnabled}
             />
           </motion.div>
         ) : (
@@ -150,6 +153,7 @@ export function Stage({
               onRetryOutline={onRetryOutline}
               canEnterProMode={isEditable}
               onEnterProMode={toggleHandler}
+              settingsEnabled={settingsEnabled}
             />
           </motion.div>
         )}

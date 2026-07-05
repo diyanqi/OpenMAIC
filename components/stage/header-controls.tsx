@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import {
   Archive,
   Download,
@@ -34,6 +35,7 @@ interface HeaderControlsProps {
   readonly mode?: StageMode;
   readonly canEdit?: boolean;
   readonly onToggleEditMode?: () => void;
+  readonly settingsEnabled?: boolean;
   /**
    * `default` — the chunky h-9 pill used in the playback Stage Header.
    * `compact` — slightly tighter padding for embedding in CommandBar's
@@ -60,10 +62,13 @@ export function HeaderControls({
   mode,
   canEdit,
   onToggleEditMode,
+  settingsEnabled = true,
   variant = 'default',
 }: HeaderControlsProps) {
   const { t } = useI18n();
   const { theme, setTheme } = useTheme();
+  const pathname = usePathname();
+  const settingsAllowed = settingsEnabled && !pathname?.startsWith('/classroom/');
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Export plumbing — uses the stage / media task stores to check
@@ -174,13 +179,15 @@ export function HeaderControls({
         </DropdownMenu>
 
         {/* Settings */}
-        <button
-          onClick={() => setSettingsOpen(true)}
-          className="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:shadow-sm transition-all group"
-          aria-label={t('settings.title')}
-        >
-          <Settings className="w-4 h-4 group-hover:rotate-90 transition-transform duration-500" />
-        </button>
+        {settingsAllowed && (
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="p-2 rounded-full text-gray-400 dark:text-gray-500 hover:bg-white dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 hover:shadow-sm transition-all group"
+            aria-label={t('settings.title')}
+          >
+            <Settings className="w-4 h-4 group-hover:rotate-90 transition-transform duration-500" />
+          </button>
+        )}
       </div>
 
       {/* Pro Switch — toggle property: on/off both clickable, not a
@@ -313,7 +320,7 @@ export function HeaderControls({
         )}
       </div>
 
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      {settingsAllowed && <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />}
     </div>
   );
 }

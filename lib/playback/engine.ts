@@ -50,6 +50,16 @@ const log = createLogger('PlaybackEngine');
  */
 const CJK_LANG_THRESHOLD = 0.3;
 
+function isInterruptedAudioPlaybackError(error: unknown): boolean {
+  const maybeError = error as { name?: unknown; message?: unknown } | null | undefined;
+  if (maybeError?.name === 'AbortError') return true;
+  const message = typeof maybeError?.message === 'string' ? maybeError.message : '';
+  return (
+    message.includes('interrupted by a call to pause') ||
+    message.includes('interrupted by a new load request')
+  );
+}
+
 export class PlaybackEngine {
   private scenes: Scene[] = [];
   private sceneIndex: number = 0;
@@ -496,6 +506,7 @@ export class PlaybackEngine {
         this.audioPlayer
           .play(speechAction.audioId || '', speechAction.audioUrl)
           .then((audioStarted) => {
+            if (this.mode !== 'playing') return;
             if (!audioStarted) {
               // No pre-generated audio — browser-native speaks directly; EdgeTTS
               // falls back here when server synthesis failed during generation.
@@ -521,6 +532,9 @@ export class PlaybackEngine {
             }
           })
           .catch((err) => {
+            if (this.mode !== 'playing' || isInterruptedAudioPlaybackError(err)) {
+              return;
+            }
             log.error('TTS error:', err);
             const settings = useSettingsStore.getState();
             if (

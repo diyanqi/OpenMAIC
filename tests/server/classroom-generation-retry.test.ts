@@ -101,19 +101,27 @@ describe('classroom scene generation retries', () => {
     mocks.applyOutlineFallbacks.mockImplementation((value) => value);
     mocks.generateSceneActions.mockResolvedValue([]);
     mocks.createSceneWithActions.mockImplementation((sceneOutline, content, actions, api) => {
+      const sceneContent =
+        sceneOutline.type === 'pbl'
+          ? {
+              type: 'pbl',
+              projectConfig: content.projectConfig,
+              projectV2: content.projectV2,
+            }
+          : {
+              type: 'slide',
+              canvas: {
+                id: 'slide-1',
+                viewportSize: 1000,
+                viewportRatio: 0.5625,
+                elements: content.elements,
+              },
+            };
       const sceneResult = api.scene.create({
         type: sceneOutline.type,
         title: sceneOutline.title,
         order: sceneOutline.order,
-        content: {
-          type: 'slide',
-          canvas: {
-            id: 'slide-1',
-            viewportSize: 1000,
-            viewportRatio: 0.5625,
-            elements: content.elements,
-          },
-        },
+        content: sceneContent,
         actions,
       });
       return sceneResult.success ? (sceneResult.data ?? null) : null;
@@ -160,6 +168,59 @@ describe('classroom scene generation retries', () => {
       'generate-classroom-scene',
       undefined,
       thinkingConfig,
+    );
+  });
+
+  it('forwards the resolved language model to PBL scene content generation', async () => {
+    const languageModel = { id: 'language-model' };
+    const thinkingConfig = { enabled: true, effort: 'high' };
+    const pblOutline = {
+      id: 'outline-pbl-1',
+      type: 'pbl',
+      title: 'Retry Project',
+      description: 'Investigate retry behavior',
+      keyPoints: ['Retries'],
+      order: 1,
+      pblConfig: {
+        projectTopic: 'Retry Project',
+        projectDescription: 'Investigate retry behavior',
+        targetSkills: ['debugging'],
+      },
+    } as const;
+    const projectConfig = {
+      projectInfo: { title: 'Retry Project', description: 'Investigate retry behavior' },
+      agents: [],
+      issueboard: { agent_ids: [], issues: [], current_issue_id: null },
+      chat: { messages: [] },
+    };
+
+    mocks.resolveModel.mockResolvedValue({
+      model: languageModel,
+      modelInfo: {},
+      modelString: 'test:model',
+      providerId: 'test',
+      apiKey: '',
+      thinkingConfig,
+    });
+    mocks.generateSceneOutlinesFromRequirements.mockResolvedValue({
+      success: true,
+      data: {
+        languageDirective: 'Use English.',
+        outlines: [pblOutline],
+      },
+    });
+    mocks.generateSceneContent.mockResolvedValue({ projectConfig });
+
+    await generateWithProgress();
+
+    expect(mocks.generateSceneContent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'pbl' }),
+      expect.any(Function),
+      expect.objectContaining({
+        languageModel,
+        thinkingConfig,
+        userRequirements: { requirement: 'Teach retry basics' },
+      }),
     );
   });
 

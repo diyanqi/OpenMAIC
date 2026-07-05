@@ -11,9 +11,16 @@ interface HeaderProps {
   readonly mode?: StageMode;
   readonly canEdit?: boolean;
   readonly onToggleEditMode?: () => void;
+  readonly settingsEnabled?: boolean;
 }
 
-export function Header({ currentSceneTitle, mode, canEdit, onToggleEditMode }: HeaderProps) {
+export function Header({
+  currentSceneTitle,
+  mode,
+  canEdit,
+  onToggleEditMode,
+  settingsEnabled,
+}: HeaderProps) {
   const { t } = useI18n();
   const router = useRouter();
 
@@ -52,7 +59,12 @@ export function Header({ currentSceneTitle, mode, canEdit, onToggleEditMode }: H
           )}
         </div>
 
-        <HeaderControls mode={mode} canEdit={canEdit} onToggleEditMode={onToggleEditMode} />
+        <HeaderControls
+          mode={mode}
+          canEdit={canEdit}
+          onToggleEditMode={onToggleEditMode}
+          settingsEnabled={settingsEnabled}
+        />
       </header>
     </>
   );

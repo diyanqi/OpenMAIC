@@ -1,13 +1,19 @@
 'use client';
 
-import { useRef, useState, useLayoutEffect } from 'react';
+import { useRef, useState, useLayoutEffect, useMemo } from 'react';
 import type { PPTLatexElement } from '@openmaic/dsl';
+import { renderLatexElementHtml } from '../../utils/latex';
 
 export interface BaseLatexElementProps {
   elementInfo: PPTLatexElement;
 }
 
 export function BaseLatexElement({ elementInfo }: BaseLatexElementProps) {
+  const html = useMemo(
+    () => elementInfo.html || renderLatexElementHtml(elementInfo.latex),
+    [elementInfo.html, elementInfo.latex],
+  );
+
   return (
     <div
       className="base-element-latex"
@@ -38,9 +44,9 @@ export function BaseLatexElement({ elementInfo }: BaseLatexElementProps) {
             ...(elementInfo.color ? { color: elementInfo.color } : {}),
           }}
         >
-          {elementInfo.html ? (
+          {html ? (
             <KatexContent
-              html={elementInfo.html}
+              html={html}
               width={elementInfo.width}
               height={elementInfo.height}
               align={elementInfo.align}

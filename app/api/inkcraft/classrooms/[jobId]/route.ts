@@ -30,7 +30,8 @@ export async function GET(req: NextRequest, context: { params: Promise<{ jobId: 
       return apiError('INVALID_REQUEST', 404, 'Classroom generation job not found');
     }
 
-    const statusUrl = `${buildRequestOrigin(req)}/api/inkcraft/classrooms/${jobId}`;
+    const origin = buildRequestOrigin(req);
+    const statusUrl = `${origin}/api/inkcraft/classrooms/${jobId}`;
     return apiSuccess({
       jobId: job.id,
       status: job.status,
@@ -43,7 +44,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ jobId: 
       scenesGenerated: job.scenesGenerated,
       totalScenes: job.totalScenes,
       classroomId: job.result?.classroomId ?? null,
-      classroomUrl: job.result?.url ?? null,
+      classroomUrl: job.result ? `${origin}/classroom/${job.result.classroomId}` : null,
       scenesCount: job.result?.scenesCount ?? null,
       error: job.error,
       done: job.status === 'succeeded' || job.status === 'failed',

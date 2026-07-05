@@ -451,8 +451,11 @@ export async function generateClassroom(
     const content = await withGenerationRetry(
       () =>
         generateSceneContent(safeOutline, sceneAiCall, {
+          languageModel,
           agents,
           languageDirective,
+          thinkingConfig: classroomThinking,
+          userRequirements: requirements,
           allowProceduralSkill: vocationalActive,
         }),
       {

@@ -2,6 +2,8 @@ import type { NextRequest } from 'next/server';
 
 export const INKCRAFT_OAUTH_BASE_URL =
   process.env.INKCRAFT_OAUTH_BASE_URL?.replace(/\/+$/, '') || 'https://www.inkcraft.cn';
+export const INKCRAFT_OAUTH_API_BASE_URL =
+  process.env.INKCRAFT_OAUTH_API_BASE_URL?.replace(/\/+$/, '') || 'https://inkcraft-api.amzcd.top';
 export const INKCRAFT_OAUTH_STATE_COOKIE = 'openmaic_oauth_state';
 export const INKCRAFT_OAUTH_VERIFIER_COOKIE = 'openmaic_oauth_verifier';
 export const INKCRAFT_OAUTH_RETURN_TO_COOKIE = 'openmaic_oauth_return_to';
@@ -28,13 +30,16 @@ export function getInkcraftOAuthConfig(): InkcraftOAuthConfig | null {
   if (!clientId) return null;
 
   const baseUrl = INKCRAFT_OAUTH_BASE_URL;
+  const apiBaseUrl = INKCRAFT_OAUTH_API_BASE_URL;
   return {
     baseUrl,
     clientId,
     clientSecret: process.env.INKCRAFT_OAUTH_CLIENT_SECRET || undefined,
-    authorizationEndpoint: `${baseUrl}/oauth/authorize`,
-    tokenEndpoint: `${baseUrl}/oauth/token`,
-    userInfoEndpoint: `${baseUrl}/oauth/userinfo`,
+    authorizationEndpoint:
+      process.env.INKCRAFT_OAUTH_AUTHORIZATION_ENDPOINT || `${baseUrl}/oauth/authorize`,
+    tokenEndpoint: process.env.INKCRAFT_OAUTH_TOKEN_ENDPOINT || `${apiBaseUrl}/oauth/token`,
+    userInfoEndpoint:
+      process.env.INKCRAFT_OAUTH_USERINFO_ENDPOINT || `${apiBaseUrl}/oauth/userinfo`,
     scope: process.env.INKCRAFT_OAUTH_SCOPE || 'openid profile email',
   };
 }

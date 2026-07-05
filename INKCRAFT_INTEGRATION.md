@@ -6,6 +6,7 @@ MAIC browser users authenticate through Inkcraft OAuth. If a user opens MAIC wit
 
 ```bash
 INKCRAFT_OAUTH_BASE_URL=https://www.inkcraft.cn
+INKCRAFT_OAUTH_API_BASE_URL=https://inkcraft-api.amzcd.top
 INKCRAFT_OAUTH_CLIENT_ID=...
 INKCRAFT_OAUTH_CLIENT_SECRET=...
 INKCRAFT_OAUTH_SESSION_SECRET=...
@@ -28,9 +29,9 @@ OAuth endpoints used by MAIC:
 
 ```text
 Discovery: /.well-known/oauth-authorization-server
-Authorize:  /oauth/authorize
-Token:      /oauth/token
-UserInfo:   /oauth/userinfo
+Authorize:  https://www.inkcraft.cn/oauth/authorize
+Token:      https://inkcraft-api.amzcd.top/oauth/token
+UserInfo:   https://inkcraft-api.amzcd.top/oauth/userinfo
 ```
 
 ## Server-to-Server Classroom Creation

@@ -79,8 +79,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const oauthEnabled =
-    process.env.INKCRAFT_OAUTH_DISABLED !== 'true' && !!process.env.INKCRAFT_OAUTH_CLIENT_ID;
+  const oauthEnabled = process.env.INKCRAFT_OAUTH_DISABLED !== 'true';
   const authBypass = isAuthBypassPath(pathname);
 
   if (oauthEnabled && !authBypass) {

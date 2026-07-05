@@ -503,9 +503,9 @@ pdf:
   });
 
   describe('getServerTTSProviders force-disable (#665)', () => {
-    it('reports nothing when no TTS provider is configured or disabled', async () => {
+    it('reports EdgeTTS when no paid TTS provider is configured', async () => {
       const { getServerTTSProviders } = await import('@/lib/server/provider-config');
-      expect(getServerTTSProviders()).toEqual({});
+      expect(getServerTTSProviders()).toEqual({ 'edge-tts': {} });
     });
 
     it('marks an env-configured TTS provider as managed (no disabled flag)', async () => {
@@ -527,10 +527,10 @@ pdf:
       expect(getServerTTSProviders()['browser-native-tts']).toEqual({ disabled: true });
     });
 
-    it('does not expose EdgeTTS by default but can force-disable it via env', async () => {
+    it('exposes EdgeTTS by default but can force-disable it via env', async () => {
       const { getServerTTSProviders, isServerTTSProviderDisabled } =
         await import('@/lib/server/provider-config');
-      expect(getServerTTSProviders()['edge-tts']).toBeUndefined();
+      expect(getServerTTSProviders()['edge-tts']).toEqual({});
       expect(isServerTTSProviderDisabled('edge-tts')).toBe(false);
 
       vi.resetModules();

@@ -304,14 +304,22 @@ function buildConfig(yamlData: YamlData): ServerConfig {
     }),
     yamlData.image,
   );
+  const ttsDisabled = collectDisabledTTS(yamlData.tts);
+  const tts = loadEnvSection(TTS_ENV_MAP, yamlData.tts, {
+    keylessProviders: new Set(['voxcpm-tts', 'lemonade-tts', 'edge-tts']),
+  });
+  if (!ttsDisabled.has('edge-tts') && !tts['edge-tts']) {
+    tts['edge-tts'] = {
+      apiKey: '',
+      baseUrl: process.env.TTS_EDGE_BASE_URL,
+    };
+  }
 
   return {
     providers: loadEnvSection(LLM_ENV_MAP, yamlData.providers, {
       keylessProviders: new Set(['ollama', 'lemonade']),
     }),
-    tts: loadEnvSection(TTS_ENV_MAP, yamlData.tts, {
-      keylessProviders: new Set(['voxcpm-tts', 'lemonade-tts', 'edge-tts']),
-    }),
+    tts,
     asr: loadEnvSection(ASR_ENV_MAP, yamlData.asr, {
       keylessProviders: new Set(['lemonade-asr']),
     }),
@@ -322,7 +330,7 @@ function buildConfig(yamlData: YamlData): ServerConfig {
     image,
     video: loadEnvSection(VIDEO_ENV_MAP, yamlData.video),
     webSearch: loadEnvSection(WEB_SEARCH_ENV_MAP, yamlData['web-search']),
-    ttsDisabled: collectDisabledTTS(yamlData.tts),
+    ttsDisabled,
   };
 }
 

@@ -6,7 +6,7 @@
  *    so a keyless local provider (Lemonade) is NOT force-shown;
  *  - per-provider user `enabled` flag being honored;
  *  - server/admin force-off taking precedence over the user toggle;
- *  - browser-native being opt-in (default OFF) and a first-class provider.
+ *  - EdgeTTS being free/default-on while browser-native remains opt-in.
  */
 import { describe, it, expect } from 'vitest';
 import {
@@ -47,6 +47,11 @@ describe('isTTSProviderConfigured', () => {
     expect(isTTSProviderConfigured('browser-native-tts', {})).toBe(true);
   });
 
+  it('edge-tts is always configured (free Edge Read Aloud endpoint)', () => {
+    expect(isTTSProviderConfigured('edge-tts', undefined)).toBe(true);
+    expect(isTTSProviderConfigured('edge-tts', {})).toBe(true);
+  });
+
   it('custom provider is configured once it has a credential path or voices', () => {
     expect(isTTSProviderConfigured('custom-tts-foo', {})).toBe(false);
     expect(isTTSProviderConfigured('custom-tts-foo', { apiKey: 'k' })).toBe(true);
@@ -83,6 +88,11 @@ describe('isTTSProviderEnabled', () => {
       isTTSProviderEnabled('browser-native-tts', { enabled: true, serverDisabled: true }),
     ).toBe(false);
   });
+
+  it('edge-tts is enabled by default but can still be disabled', () => {
+    expect(isTTSProviderEnabled('edge-tts', undefined)).toBe(true);
+    expect(isTTSProviderEnabled('edge-tts', { enabled: false })).toBe(false);
+  });
 });
 
 describe('listEnabledTTSProviderIds / hasAnyEnabledTTSProvider', () => {
@@ -96,12 +106,17 @@ describe('listEnabledTTSProviderIds / hasAnyEnabledTTSProvider', () => {
   };
 
   it('lists only enabled providers in canonical registry order', () => {
-    expect(listEnabledTTSProviderIds(config)).toEqual(['openai-tts', 'custom-tts-foo']);
+    expect(listEnabledTTSProviderIds(config)).toEqual(['openai-tts', 'edge-tts', 'custom-tts-foo']);
   });
 
   it('hasAny reflects emptiness', () => {
     expect(hasAnyEnabledTTSProvider(config)).toBe(true);
-    expect(hasAnyEnabledTTSProvider({ 'browser-native-tts': { enabled: false } })).toBe(false);
+    expect(
+      hasAnyEnabledTTSProvider({
+        'edge-tts': { enabled: false },
+        'browser-native-tts': { enabled: false },
+      }),
+    ).toBe(false);
     expect(hasAnyEnabledTTSProvider({ 'browser-native-tts': { enabled: true } })).toBe(true);
   });
 });

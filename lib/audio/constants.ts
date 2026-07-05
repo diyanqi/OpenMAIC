@@ -928,6 +928,30 @@ export const TTS_PROVIDERS: Record<BuiltInTTSProviderId, TTSProviderConfig> = {
     speedRange: { min: 0.7, max: 1.2, default: 1.0 },
   },
 
+  'edge-tts': {
+    id: 'edge-tts',
+    name: 'Edge TTS',
+    requiresApiKey: false,
+    defaultBaseUrl: 'https://speech.platform.bing.com',
+    icon: '/logos/browser.svg',
+    models: [{ id: 'edge-readaloud', name: 'Microsoft Edge Read Aloud' }],
+    defaultModelId: 'edge-readaloud',
+    voices: [
+      { id: 'zh-CN-XiaoxiaoNeural', name: '晓晓', language: 'zh-CN', gender: 'female' },
+      { id: 'zh-CN-YunxiNeural', name: '云希', language: 'zh-CN', gender: 'male' },
+      { id: 'zh-CN-XiaoyiNeural', name: '晓伊', language: 'zh-CN', gender: 'female' },
+      { id: 'zh-CN-YunjianNeural', name: '云健', language: 'zh-CN', gender: 'male' },
+      { id: 'en-US-JennyNeural', name: 'Jenny', language: 'en-US', gender: 'female' },
+      { id: 'en-US-GuyNeural', name: 'Guy', language: 'en-US', gender: 'male' },
+      { id: 'en-US-AriaNeural', name: 'Aria', language: 'en-US', gender: 'female' },
+      { id: 'en-GB-SoniaNeural', name: 'Sonia', language: 'en-GB', gender: 'female' },
+      { id: 'ja-JP-NanamiNeural', name: 'Nanami', language: 'ja-JP', gender: 'female' },
+      { id: 'ko-KR-SunHiNeural', name: 'SunHi', language: 'ko-KR', gender: 'female' },
+    ],
+    supportedFormats: ['mp3'],
+    speedRange: { min: 0.5, max: 2.0, default: 1.0 },
+  },
+
   'browser-native-tts': {
     id: 'browser-native-tts',
     name: '浏览器原生 (Web Speech API)',
@@ -1283,6 +1307,7 @@ export const DEFAULT_TTS_VOICES: Record<BuiltInTTSProviderId, string> = {
   'elevenlabs-tts': 'EXAVITQu4vr4xnSDxMaL',
   'minimax-tts': 'female-yujie',
   'lemonade-tts': 'af_heart',
+  'edge-tts': 'zh-CN-XiaoxiaoNeural',
   'browser-native-tts': 'default',
 };
 
@@ -1296,6 +1321,7 @@ export const DEFAULT_TTS_MODELS: Record<BuiltInTTSProviderId, string> = {
   'elevenlabs-tts': 'eleven_multilingual_v2',
   'minimax-tts': 'speech-2.8-hd',
   'lemonade-tts': 'kokoro-v1',
+  'edge-tts': 'edge-readaloud',
   'browser-native-tts': '',
 };
 

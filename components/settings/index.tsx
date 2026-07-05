@@ -148,6 +148,7 @@ function getTTSProviderName(providerId: TTSProviderId, t: (key: string) => strin
     'elevenlabs-tts': t('settings.providerElevenLabsTTS'),
     'minimax-tts': t('settings.providerMiniMaxTTS'),
     'lemonade-tts': t('settings.providerLemonadeTTS'),
+    'edge-tts': t('settings.providerEdgeTTS'),
     'browser-native-tts': t('settings.providerBrowserNativeTTS'),
   };
   return names[providerId] || providerId;
@@ -176,6 +177,7 @@ const IMAGE_PROVIDER_NAMES: Record<ImageProviderId, string> = {
   'nano-banana': 'providerNanoBanana',
   'minimax-image': 'providerMiniMaxImage',
   'grok-image': 'providerGrokImage',
+  agnes: 'providerAgnesImage',
   lemonade: 'providerLemonadeImage',
 };
 
@@ -186,6 +188,7 @@ const IMAGE_PROVIDER_ICONS: Record<ImageProviderId, string> = {
   'nano-banana': '/logos/gemini.svg',
   'minimax-image': '/logos/minimax.svg',
   'grok-image': '/logos/grok.svg',
+  agnes: '/logos/browser.svg',
   lemonade: '/logos/lemonade.svg',
 };
 
@@ -196,6 +199,7 @@ const VIDEO_PROVIDER_NAMES: Record<VideoProviderId, string> = {
   sora: 'providerSora',
   'minimax-video': 'providerMiniMaxVideo',
   'grok-video': 'providerGrokVideo',
+  agnes: 'providerAgnesVideo',
   happyhorse: 'providerHappyHorse',
 };
 
@@ -206,6 +210,7 @@ const VIDEO_PROVIDER_ICONS: Record<VideoProviderId, string> = {
   sora: '/logos/openai.svg',
   'minimax-video': '/logos/minimax.svg',
   'grok-video': '/logos/grok.svg',
+  agnes: '/logos/browser.svg',
   happyhorse: '/logos/qwen.svg',
 };
 

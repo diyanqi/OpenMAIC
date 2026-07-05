@@ -418,8 +418,8 @@ function isUsableMediaProvider(
 
 // Initialize default audio config
 const getDefaultAudioConfig = () => ({
-  ttsProviderId: 'browser-native-tts' as TTSProviderId,
-  ttsVoice: 'default',
+  ttsProviderId: 'edge-tts' as TTSProviderId,
+  ttsVoice: 'zh-CN-XiaoxiaoNeural',
   ttsSpeed: 1.0,
   asrProviderId: 'browser-native' as ASRProviderId,
   asrLanguage: 'zh',
@@ -447,6 +447,13 @@ const getDefaultAudioConfig = () => ({
       baseUrl: '',
       modelId: 'kokoro-v1',
       enabled: true,
+    },
+    'edge-tts': {
+      apiKey: '',
+      baseUrl: 'https://speech.platform.bing.com',
+      modelId: 'edge-readaloud',
+      enabled: true,
+      requiresApiKey: false,
     },
     // Browser-native is OFF by default — fully opt-in. Native voice quality is
     // poor; it must never be a silent default (#665).
@@ -485,6 +492,7 @@ const getDefaultImageConfig = () => ({
     'nano-banana': { apiKey: '', baseUrl: '', enabled: false },
     'minimax-image': { apiKey: '', baseUrl: '', enabled: false },
     'grok-image': { apiKey: '', baseUrl: '', enabled: false },
+    agnes: { apiKey: '', baseUrl: '', enabled: false },
     lemonade: { apiKey: '', baseUrl: '', enabled: false },
   } as Record<ImageProviderId, { apiKey: string; baseUrl: string; enabled: boolean }>,
 });
@@ -500,6 +508,7 @@ const getDefaultVideoConfig = () => ({
     sora: { apiKey: '', baseUrl: '', enabled: false },
     'minimax-video': { apiKey: '', baseUrl: '', enabled: false },
     'grok-video': { apiKey: '', baseUrl: '', enabled: false },
+    agnes: { apiKey: '', baseUrl: '', enabled: false },
     happyhorse: { apiKey: '', baseUrl: '', enabled: false },
   } as Record<VideoProviderId, { apiKey: string; baseUrl: string; enabled: boolean }>,
 });
@@ -893,10 +902,8 @@ export const useSettingsStore = create<SettingsState>()(
         videoGenerationEnabled: false,
         reviewOutlineEnabled: false,
 
-        // TTS is OFF by default; auto-enabled on first server-sync when a TTS
-        // provider is configured (mirrors image/video). Fresh installs with no
-        // provider stay off and show an "enable browser-native" CTA (#665).
-        ttsEnabled: false,
+        // EdgeTTS is free and keyless, so fresh installs can use TTS directly.
+        ttsEnabled: true,
         asrEnabled: true,
 
         // Off until the server reports a concurrency via fetchServerProviders.
@@ -1051,13 +1058,14 @@ export const useSettingsStore = create<SettingsState>()(
               },
             };
             // Disabling the active provider (e.g. removing a token plan) switches
-            // the selection back to the always-available browser TTS so playback
-            // doesn't keep pointing at a disabled provider with an empty key.
+            // the selection back to the free default TTS so playback doesn't keep
+            // pointing at a disabled provider with an empty key.
             if (state.ttsProviderId === providerId && config.enabled === false) {
+              const fallback = getDefaultAudioConfig().ttsProviderId;
               return {
                 ttsProvidersConfig,
-                ttsProviderId: getDefaultAudioConfig().ttsProviderId,
-                ttsVoice: 'default',
+                ttsProviderId: fallback,
+                ttsVoice: DEFAULT_TTS_VOICES[fallback as BuiltInTTSProviderId] || 'default',
               };
             }
             return { ttsProvidersConfig };
@@ -1553,7 +1561,7 @@ export const useSettingsStore = create<SettingsState>()(
                 state.ttsProviderId,
                 newTTSConfig,
                 ttsFallback,
-                'browser-native-tts' as TTSProviderId,
+                defaultAudioConfig.ttsProviderId,
               );
               const validASRProvider = validateProvider(
                 state.asrProviderId,

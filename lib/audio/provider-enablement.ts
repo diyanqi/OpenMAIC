@@ -26,6 +26,7 @@ import { TTS_PROVIDERS } from '@/lib/audio/constants';
 import { isCustomTTSProvider, type TTSProviderId } from '@/lib/audio/types';
 
 export const BROWSER_NATIVE_TTS_PROVIDER_ID = 'browser-native-tts' as const;
+export const EDGE_TTS_PROVIDER_ID = 'edge-tts' as const;
 
 /** The slice of a persisted ttsProvidersConfig entry the predicates rely on. */
 export interface TTSEnablementConfig {
@@ -60,8 +61,11 @@ export function isTTSProviderConfigured(
   providerId: TTSProviderId,
   config: TTSEnablementConfig | undefined,
 ): boolean {
-  // Browser-native runs in-browser; it never needs a credential path.
-  if (providerId === BROWSER_NATIVE_TTS_PROVIDER_ID) return true;
+  // Browser-native runs in-browser and EdgeTTS uses the free Edge Read Aloud
+  // endpoint; neither needs an operator credential path.
+  if (providerId === BROWSER_NATIVE_TTS_PROVIDER_ID || providerId === EDGE_TTS_PROVIDER_ID) {
+    return true;
+  }
   if (!config) return false;
   if (config.isServerConfigured) return true;
 

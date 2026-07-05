@@ -95,6 +95,7 @@
 import type { TTSModelConfig } from './types';
 import { isCustomTTSProvider } from './types';
 import { TTS_PROVIDERS } from './constants';
+import { Communicate } from 'edge-tts-universal';
 import { splitConcatenatedJsonObjects } from './json-stream';
 import {
   VOXCPM_VLLM_MODEL_ID,
@@ -179,6 +180,9 @@ export async function generateTTS(
     case 'lemonade-tts':
       return await generateLemonadeTTS(config, text);
 
+    case 'edge-tts':
+      return await generateEdgeTTS(config, text);
+
     case 'browser-native-tts':
       throw new Error(
         'Browser Native TTS must be handled client-side using Web Speech API. This provider cannot be used on the server.',
@@ -190,6 +194,43 @@ export async function generateTTS(
       }
       throw new Error(`Unsupported TTS provider: ${config.providerId}`);
   }
+}
+
+const EDGE_TTS_TIMEOUT_MS = 25000;
+
+function speedToEdgeRate(speed: number | undefined): string {
+  const normalized = Math.min(2, Math.max(0.5, speed || 1));
+  const percent = Math.round((normalized - 1) * 100);
+  return `${percent >= 0 ? '+' : ''}${percent}%`;
+}
+
+async function generateEdgeTTS(config: TTSModelConfig, text: string): Promise<TTSGenerationResult> {
+  const communicate = new Communicate(text, {
+    voice: config.voice || 'zh-CN-XiaoxiaoNeural',
+    rate: speedToEdgeRate(config.speed),
+    connectionTimeout: EDGE_TTS_TIMEOUT_MS,
+  });
+  const chunks: Uint8Array[] = [];
+
+  for await (const chunk of communicate.stream()) {
+    if (chunk.type === 'audio' && chunk.data) {
+      chunks.push(new Uint8Array(chunk.data));
+    }
+  }
+
+  const total = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+  if (total === 0) {
+    throw new Error('Edge TTS returned no audio');
+  }
+
+  const audio = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    audio.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return { audio, format: 'mp3' };
 }
 
 /**

@@ -86,6 +86,17 @@ vi.mock('@/lib/audio/constants', () => ({
       supportedFormats: ['browser'],
       speedRange: { min: 0.1, max: 10, default: 1 },
     },
+    'edge-tts': {
+      id: 'edge-tts',
+      name: 'Edge TTS',
+      requiresApiKey: false,
+      defaultBaseUrl: 'https://speech.platform.bing.com',
+      defaultModelId: 'edge-readaloud',
+      models: [{ id: 'edge-readaloud', name: 'Microsoft Edge Read Aloud' }],
+      voices: [{ id: 'zh-CN-XiaoxiaoNeural', name: 'Xiaoxiao', language: 'zh-CN' }],
+      supportedFormats: ['mp3'],
+      speedRange: { min: 0.5, max: 2, default: 1 },
+    },
   },
   ASR_PROVIDERS: {
     'openai-whisper': {
@@ -109,6 +120,7 @@ vi.mock('@/lib/audio/constants', () => ({
   },
   DEFAULT_TTS_VOICES: {
     'openai-tts': 'alloy',
+    'edge-tts': 'zh-CN-XiaoxiaoNeural',
     'browser-native-tts': 'default',
   },
 }));
@@ -625,7 +637,7 @@ describe('fetchServerProviders — TTS stale selection', () => {
     return useSettingsStore;
   }
 
-  it('falls back to browser-native-tts when selected TTS provider loses server config', async () => {
+  it('falls back to edge-tts when selected TTS provider loses server config', async () => {
     const store = await getStore();
 
     mockServerResponse({ tts: { 'openai-tts': {} } });
@@ -636,7 +648,7 @@ describe('fetchServerProviders — TTS stale selection', () => {
     mockServerResponse({});
     await store.getState().fetchServerProviders();
 
-    expect(store.getState().ttsProviderId).toBe('browser-native-tts');
+    expect(store.getState().ttsProviderId).toBe('edge-tts');
   });
 
   it('falls back to remaining server TTS provider when selected one is removed', async () => {
@@ -1524,24 +1536,24 @@ describe('TTS provider enablement (#665)', () => {
     expect(store.getState().ttsProvidersConfig['browser-native-tts'].enabled).toBe(false);
   });
 
-  it('TTS master toggle is OFF by default on a fresh install', async () => {
+  it('TTS master toggle is ON by default on a fresh install', async () => {
     const store = await getStore();
-    expect(store.getState().ttsEnabled).toBe(false);
+    expect(store.getState().ttsEnabled).toBe(true);
   });
 
   it('first server-sync auto-enables TTS when a server provider exists', async () => {
     mockServerResponse({ tts: { 'openai-tts': {} } });
     const store = await getStore();
-    expect(store.getState().ttsEnabled).toBe(false);
+    expect(store.getState().ttsEnabled).toBe(true);
     await store.getState().fetchServerProviders();
     expect(store.getState().ttsEnabled).toBe(true);
   });
 
-  it('server-sync does NOT auto-enable TTS when no provider is configured', async () => {
+  it('server-sync keeps default EdgeTTS enabled when no provider is configured', async () => {
     mockServerResponse({ tts: {} });
     const store = await getStore();
     await store.getState().fetchServerProviders();
-    expect(store.getState().ttsEnabled).toBe(false);
+    expect(store.getState().ttsEnabled).toBe(true);
   });
 
   it('non-browser-native built-ins default enabled:true (configured ⇒ visible)', async () => {

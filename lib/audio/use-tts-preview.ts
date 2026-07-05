@@ -116,6 +116,23 @@ export function useTTSPreview() {
         if (isStale()) return;
 
         if (!res.ok || !data.base64) {
+          if (options.providerId === 'edge-tts') {
+            const voices = await ensureVoicesLoaded();
+            if (isStale()) return;
+            const controller = playBrowserTTSPreview({
+              text: options.text,
+              voice: options.voice,
+              rate: options.speed,
+              voices,
+            });
+            cancelRef.current = controller.cancel;
+            await controller.promise;
+            if (!isStale()) {
+              cancelRef.current = null;
+              setPreviewing(false);
+            }
+            return;
+          }
           throw new Error(data.error || 'TTS preview failed');
         }
 
@@ -138,8 +155,30 @@ export function useTTSPreview() {
           }
         };
         audio.onerror = () => {
-          if (!isStale()) {
-            audioRef.current = null;
+          if (isStale()) return;
+          audioRef.current = null;
+          if (options.providerId === 'edge-tts') {
+            ensureVoicesLoaded()
+              .then((voices) => {
+                if (isStale()) return;
+                const controller = playBrowserTTSPreview({
+                  text: options.text,
+                  voice: options.voice,
+                  rate: options.speed,
+                  voices,
+                });
+                cancelRef.current = controller.cancel;
+                return controller.promise.finally(() => {
+                  if (!isStale()) {
+                    cancelRef.current = null;
+                    setPreviewing(false);
+                  }
+                });
+              })
+              .catch(() => {
+                if (!isStale()) setPreviewing(false);
+              });
+          } else {
             setPreviewing(false);
           }
         };

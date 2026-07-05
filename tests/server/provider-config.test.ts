@@ -31,6 +31,7 @@ const ENV_PREFIXES_TO_CLEAR = [
   'TTS_DOUBAO',
   'TTS_ELEVENLABS',
   'TTS_MINIMAX',
+  'TTS_EDGE',
   'ASR_OPENAI',
   'ASR_QWEN',
   'PDF_UNPDF',
@@ -42,12 +43,14 @@ const ENV_PREFIXES_TO_CLEAR = [
   'IMAGE_NANO_BANANA',
   'IMAGE_MINIMAX',
   'IMAGE_GROK',
+  'IMAGE_AGNES',
   'VIDEO_SEEDANCE',
   'VIDEO_KLING',
   'VIDEO_VEO',
   'VIDEO_SORA',
   'VIDEO_MINIMAX',
   'VIDEO_GROK',
+  'VIDEO_AGNES',
   'BOCHA',
   'WEB_SEARCH_MINIMAX',
 ];
@@ -446,6 +449,34 @@ pdf:
       expect(providers['grok-video']).toEqual({});
       expect(resolveVideoBaseUrl('grok-video')).toBe('https://proxy.example.com/video');
     });
+
+    it('maps Agnes image env and keeps multi-key config server-side', async () => {
+      vi.stubEnv('IMAGE_AGNES_API_KEY', 'agnes-a,agnes-b');
+      vi.stubEnv('IMAGE_AGNES_BASE_URL', 'https://proxy.example.com/agnes-image');
+      const { getServerImageProviders, resolveImageApiKey, resolveImageBaseUrl } =
+        await import('@/lib/server/provider-config');
+
+      const providers = getServerImageProviders();
+      expect(providers.agnes).toEqual({});
+      expect((providers.agnes as Record<string, unknown>).apiKey).toBeUndefined();
+      expect((providers.agnes as Record<string, unknown>).baseUrl).toBeUndefined();
+      expect(resolveImageApiKey('agnes')).toBe('agnes-a,agnes-b');
+      expect(resolveImageBaseUrl('agnes')).toBe('https://proxy.example.com/agnes-image');
+    });
+
+    it('maps Agnes video env and keeps multi-key config server-side', async () => {
+      vi.stubEnv('VIDEO_AGNES_API_KEY', 'agnes-a;agnes-b');
+      vi.stubEnv('VIDEO_AGNES_BASE_URL', 'https://proxy.example.com/agnes-video');
+      const { getServerVideoProviders, resolveVideoApiKey, resolveVideoBaseUrl } =
+        await import('@/lib/server/provider-config');
+
+      const providers = getServerVideoProviders();
+      expect(providers.agnes).toEqual({});
+      expect((providers.agnes as Record<string, unknown>).apiKey).toBeUndefined();
+      expect((providers.agnes as Record<string, unknown>).baseUrl).toBeUndefined();
+      expect(resolveVideoApiKey('agnes')).toBe('agnes-a;agnes-b');
+      expect(resolveVideoBaseUrl('agnes')).toBe('https://proxy.example.com/agnes-video');
+    });
   });
 
   describe('isServerConfiguredProvider', () => {
@@ -485,6 +516,19 @@ pdf:
       vi.stubEnv('TTS_BROWSER_NATIVE_ENABLED', 'false');
       const { getServerTTSProviders } = await import('@/lib/server/provider-config');
       expect(getServerTTSProviders()['browser-native-tts']).toEqual({ disabled: true });
+    });
+
+    it('does not expose EdgeTTS by default but can force-disable it via env', async () => {
+      const { getServerTTSProviders, isServerTTSProviderDisabled } =
+        await import('@/lib/server/provider-config');
+      expect(getServerTTSProviders()['edge-tts']).toBeUndefined();
+      expect(isServerTTSProviderDisabled('edge-tts')).toBe(false);
+
+      vi.resetModules();
+      vi.stubEnv('TTS_EDGE_ENABLED', 'false');
+      const disabledConfig = await import('@/lib/server/provider-config');
+      expect(disabledConfig.getServerTTSProviders()['edge-tts']).toEqual({ disabled: true });
+      expect(disabledConfig.isServerTTSProviderDisabled('edge-tts')).toBe(true);
     });
 
     it('force-disables a provider via YAML tts.<id>.enabled: false', async () => {

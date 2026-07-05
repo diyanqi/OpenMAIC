@@ -78,6 +78,7 @@ export type ImageProviderId =
   | 'nano-banana'
   | 'minimax-image'
   | 'grok-image'
+  | 'agnes'
   | 'lemonade';
 // Add new image providers below (uncomment and modify):
 // | 'dall-e'
@@ -194,6 +195,7 @@ export type VideoProviderId =
   | 'sora'
   | 'minimax-video'
   | 'grok-video'
+  | 'agnes'
   | 'happyhorse';
 // Add new video providers below (uncomment and modify):
 // | 'runway'

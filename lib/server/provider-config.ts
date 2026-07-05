@@ -76,6 +76,7 @@ const TTS_ENV_MAP: Record<string, string> = {
   TTS_ELEVENLABS: 'elevenlabs-tts',
   TTS_MINIMAX: 'minimax-tts',
   TTS_LEMONADE: 'lemonade-tts',
+  TTS_EDGE: 'edge-tts',
 };
 
 /**
@@ -108,6 +109,7 @@ const IMAGE_ENV_MAP: Record<string, string> = {
   IMAGE_NANO_BANANA: 'nano-banana',
   IMAGE_MINIMAX: 'minimax-image',
   IMAGE_GROK: 'grok-image',
+  IMAGE_AGNES: 'agnes',
   IMAGE_LEMONADE: 'lemonade',
 };
 
@@ -118,6 +120,7 @@ const VIDEO_ENV_MAP: Record<string, string> = {
   VIDEO_SORA: 'sora',
   VIDEO_MINIMAX: 'minimax-video',
   VIDEO_GROK: 'grok-video',
+  VIDEO_AGNES: 'agnes',
   VIDEO_HAPPYHORSE: 'happyhorse',
 };
 
@@ -307,7 +310,7 @@ function buildConfig(yamlData: YamlData): ServerConfig {
       keylessProviders: new Set(['ollama', 'lemonade']),
     }),
     tts: loadEnvSection(TTS_ENV_MAP, yamlData.tts, {
-      keylessProviders: new Set(['voxcpm-tts', 'lemonade-tts']),
+      keylessProviders: new Set(['voxcpm-tts', 'lemonade-tts', 'edge-tts']),
     }),
     asr: loadEnvSection(ASR_ENV_MAP, yamlData.asr, {
       keylessProviders: new Set(['lemonade-asr']),

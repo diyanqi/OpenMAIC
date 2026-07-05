@@ -47,6 +47,7 @@ export interface GenerationToolbarProps {
   webSearch: boolean;
   onWebSearchChange: (v: boolean) => void;
   onSettingsOpen: (section?: SettingsSection) => void;
+  settingsEnabled?: boolean;
   // PDF
   pdfFile: File | null;
   onPdfFileChange: (file: File | null) => void;
@@ -58,6 +59,7 @@ export function GenerationToolbar({
   webSearch,
   onWebSearchChange,
   onSettingsOpen,
+  settingsEnabled = true,
   pdfFile,
   onPdfFileChange,
   onPdfError,
@@ -150,7 +152,7 @@ export function GenerationToolbar({
           }
           t={t}
         />
-      ) : (
+      ) : settingsEnabled ? (
         <Tooltip>
           <TooltipTrigger asChild>
             <button
@@ -167,7 +169,7 @@ export function GenerationToolbar({
           </TooltipTrigger>
           <TooltipContent>{t('toolbar.configureProviderHint')}</TooltipContent>
         </Tooltip>
-      )}
+      ) : null}
 
       <div className="flex min-w-0 items-center gap-1">
         {/* ── Separator ── */}
@@ -403,7 +405,7 @@ export function GenerationToolbar({
         <div className="w-px h-4 bg-border/60 mx-1" />
 
         {/* ── Media popover ── */}
-        <MediaPopover onSettingsOpen={onSettingsOpen} />
+        <MediaPopover onSettingsOpen={onSettingsOpen} settingsEnabled={settingsEnabled} />
       </div>
     </div>
   );

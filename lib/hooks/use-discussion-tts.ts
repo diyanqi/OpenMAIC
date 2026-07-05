@@ -73,6 +73,14 @@ export function useDiscussionTTS({ enabled, agents, onAudioStateChange }: Discus
         processQueueRef.current();
       }
     },
+    onError: () => {
+      isPlayingRef.current = false;
+      segmentDoneCounterRef.current++;
+      onAudioStateChangeRef.current?.(null, 'idle');
+      if (!pausedRef.current) {
+        processQueueRef.current();
+      }
+    },
   });
   const browserCancelRef = useRef(browserCancel);
   browserCancelRef.current = browserCancel;
@@ -229,6 +237,16 @@ export function useDiscussionTTS({ enabled, agents, onAudioStateChange }: Discus
       });
       audio.addEventListener('error', () => {
         audioRef.current = null;
+        if (
+          item.providerId === 'edge-tts' &&
+          typeof window !== 'undefined' &&
+          window.speechSynthesis
+        ) {
+          currentProviderRef.current = 'browser-native-tts';
+          onAudioStateChangeRef.current?.(item.agentId, 'playing');
+          browserSpeakRef.current(item.text, item.voiceId);
+          return;
+        }
         isPlayingRef.current = false;
         segmentDoneCounterRef.current++;
         onAudioStateChangeRef.current?.(item.agentId, 'idle');
@@ -249,6 +267,18 @@ export function useDiscussionTTS({ enabled, agents, onAudioStateChange }: Discus
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         console.error('[DiscussionTTS] TTS generation failed:', err);
+      }
+      if (
+        (err as Error).name !== 'AbortError' &&
+        item.providerId === 'edge-tts' &&
+        typeof window !== 'undefined' &&
+        window.speechSynthesis
+      ) {
+        audioRef.current = null;
+        currentProviderRef.current = 'browser-native-tts';
+        onAudioStateChangeRef.current?.(item.agentId, 'playing');
+        browserSpeakRef.current(item.text, item.voiceId);
+        return;
       }
       audioRef.current = null;
       isPlayingRef.current = false;

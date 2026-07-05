@@ -18,6 +18,7 @@ import {
 } from './adapters/minimax-video-adapter';
 import { generateWithGrokVideo, testGrokVideoConnectivity } from './adapters/grok-video-adapter';
 import { generateWithHappyHorse, testHappyHorseConnectivity } from './adapters/happyhorse-adapter';
+import { generateWithAgnesVideo, testAgnesVideoConnectivity } from './adapters/agnes-video-adapter';
 
 export const VIDEO_PROVIDERS: Record<VideoProviderId, VideoProviderConfig> = {
   seedance: {
@@ -117,6 +118,17 @@ export const VIDEO_PROVIDERS: Record<VideoProviderId, VideoProviderConfig> = {
     supportedDurations: [6],
     maxDuration: 6,
   },
+  agnes: {
+    id: 'agnes',
+    name: 'Agnes Video',
+    requiresApiKey: true,
+    defaultBaseUrl: 'https://apihub.agnes-ai.com',
+    models: [{ id: 'agnes-video-v2.0', name: 'Agnes Video V2.0' }],
+    supportedAspectRatios: ['16:9', '4:3', '1:1', '9:16', '3:4'],
+    supportedDurations: [5, 10],
+    supportedResolutions: ['480p', '720p', '1080p'],
+    maxDuration: 18,
+  },
   happyhorse: {
     id: 'happyhorse',
     name: 'HappyHorse',
@@ -144,6 +156,8 @@ export async function testVideoConnectivity(
       return testMiniMaxVideoConnectivity(config);
     case 'grok-video':
       return testGrokVideoConnectivity(config);
+    case 'agnes':
+      return testAgnesVideoConnectivity(config);
     case 'happyhorse':
       return testHappyHorseConnectivity(config);
     default:
@@ -211,6 +225,8 @@ export async function generateVideo(
       return generateWithMiniMaxVideo(config, options);
     case 'grok-video':
       return generateWithGrokVideo(config, options);
+    case 'agnes':
+      return generateWithAgnesVideo(config, options);
     case 'happyhorse':
       return generateWithHappyHorse(config, options);
     default:

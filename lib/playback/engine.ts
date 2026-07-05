@@ -497,17 +497,20 @@ export class PlaybackEngine {
           .play(speechAction.audioId || '', speechAction.audioUrl)
           .then((audioStarted) => {
             if (!audioStarted) {
-              // No pre-generated audio — try browser-native TTS only when it is
-              // the selected provider AND actually enabled (opt-in, #665).
+              // No pre-generated audio — browser-native speaks directly; EdgeTTS
+              // falls back here when server synthesis failed during generation.
               const settings = useSettingsStore.getState();
+              const shouldUseBrowserFallback =
+                settings.ttsProviderId === 'edge-tts' ||
+                (settings.ttsProviderId === 'browser-native-tts' &&
+                  isTTSProviderEnabled(
+                    'browser-native-tts',
+                    settings.ttsProvidersConfig?.['browser-native-tts'],
+                  ));
               if (
                 hasText &&
                 settings.ttsEnabled &&
-                settings.ttsProviderId === 'browser-native-tts' &&
-                isTTSProviderEnabled(
-                  'browser-native-tts',
-                  settings.ttsProvidersConfig?.['browser-native-tts'],
-                ) &&
+                shouldUseBrowserFallback &&
                 typeof window !== 'undefined' &&
                 window.speechSynthesis
               ) {
@@ -519,7 +522,18 @@ export class PlaybackEngine {
           })
           .catch((err) => {
             log.error('TTS error:', err);
-            scheduleReadingTimer();
+            const settings = useSettingsStore.getState();
+            if (
+              hasText &&
+              settings.ttsEnabled &&
+              settings.ttsProviderId === 'edge-tts' &&
+              typeof window !== 'undefined' &&
+              window.speechSynthesis
+            ) {
+              this.playBrowserTTS(speechAction);
+            } else {
+              scheduleReadingTimer();
+            }
           });
         break;
       }

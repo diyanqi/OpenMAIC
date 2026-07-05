@@ -24,6 +24,10 @@ interface TokenResponse {
   error_description?: string;
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function clearOAuthHandshakeCookies(response: NextResponse) {
   for (const name of [
     INKCRAFT_OAUTH_STATE_COOKIE,
@@ -75,7 +79,11 @@ async function exchangeCodeForToken({
   });
   const data = (await response.json().catch(() => ({}))) as TokenResponse;
   if (!response.ok || !data.access_token) {
-    throw new Error(data.error_description || data.error || 'Failed to exchange OAuth code');
+    throw new Error(
+      data.error_description ||
+        data.error ||
+        `Failed to exchange OAuth code (HTTP ${response.status})`,
+    );
   }
   return data;
 }
@@ -93,9 +101,65 @@ async function fetchUserInfo(accessToken: string): Promise<Record<string, unknow
   });
   const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
   if (!response.ok) {
-    throw new Error('Failed to fetch Inkcraft userinfo');
+    const upstreamError =
+      typeof data.error_description === 'string'
+        ? data.error_description
+        : typeof data.error === 'string'
+          ? data.error
+          : `HTTP ${response.status}`;
+    throw new Error(`Failed to fetch Inkcraft userinfo: ${upstreamError}`);
   }
   return data;
+}
+
+function oauthFailureResponse(req: NextRequest, error: unknown): NextResponse {
+  const message = errorMessage(error);
+  const loginUrl = new URL('/api/auth/login', resolvePublicOrigin(req));
+  const acceptsHtml = req.headers.get('accept')?.includes('text/html') ?? false;
+
+  const response = acceptsHtml
+    ? new NextResponse(
+        `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Inkcraft OAuth 登录失败</title>
+    <style>
+      body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f8fafc; color: #0f172a; }
+      main { max-width: 720px; padding: 32px; }
+      code { word-break: break-word; background: #e2e8f0; padding: 2px 6px; border-radius: 6px; }
+      a { color: #2563eb; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Inkcraft OAuth 登录失败</h1>
+      <p>MAIC 已停止自动重试，避免回到授权页循环。</p>
+      <p>错误信息：<code>${message.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</code></p>
+      <p><a href="${loginUrl.toString()}">重新登录</a></p>
+    </main>
+  </body>
+</html>`,
+        {
+          status: 500,
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        },
+      )
+    : NextResponse.json(
+        {
+          success: false,
+          error: 'Inkcraft OAuth login failed',
+          details: message,
+          loginUrl: loginUrl.toString(),
+        },
+        { status: 500 },
+      );
+
+  clearOAuthHandshakeCookies(response);
+  response.cookies.set(OAUTH_SESSION_COOKIE, '', { path: '/', maxAge: 0 });
+  response.headers.set('x-openmaic-auth-error', message);
+  return response;
 }
 
 export async function GET(req: NextRequest) {
@@ -142,10 +206,6 @@ export async function GET(req: NextRequest) {
     });
     return response;
   } catch (err) {
-    const response = NextResponse.redirect(new URL('/api/auth/login', resolvePublicOrigin(req)));
-    clearOAuthHandshakeCookies(response);
-    response.cookies.set(OAUTH_SESSION_COOKIE, '', { path: '/', maxAge: 0 });
-    response.headers.set('x-openmaic-auth-error', err instanceof Error ? err.message : String(err));
-    return response;
+    return oauthFailureResponse(req, err);
   }
 }

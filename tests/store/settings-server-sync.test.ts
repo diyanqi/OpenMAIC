@@ -1556,6 +1556,29 @@ describe('TTS provider enablement (#665)', () => {
     expect(store.getState().ttsEnabled).toBe(true);
   });
 
+  it('server-sync re-enables TTS for older persisted settings when EdgeTTS is available', async () => {
+    storage.set(
+      'settings-storage',
+      JSON.stringify({
+        version: 4,
+        state: {
+          ttsEnabled: false,
+          autoConfigApplied: true,
+          ttsProviderId: 'browser-native-tts',
+        },
+      }),
+    );
+    mockServerResponse({ tts: { 'edge-tts': {} } });
+
+    const store = await getStore();
+    expect(store.getState().ttsEnabled).toBe(false);
+
+    await store.getState().fetchServerProviders();
+
+    expect(store.getState().ttsEnabled).toBe(true);
+    expect(store.getState().ttsProviderId).toBe('edge-tts');
+  });
+
   it('non-browser-native built-ins default enabled:true (configured ⇒ visible)', async () => {
     const store = await getStore();
     // azure-tts is in the mocked registry; it must default ON so a configured /

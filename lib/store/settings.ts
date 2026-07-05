@@ -1655,6 +1655,9 @@ export const useSettingsStore = create<SettingsState>()(
               let autoImageEnabled: boolean | undefined;
               let autoVideoEnabled: boolean | undefined;
               let autoTtsEnabled: boolean | undefined;
+              const serverTtsIds = Object.entries(data.tts)
+                .filter(([, info]) => !info.disabled)
+                .map(([id]) => id) as TTSProviderId[];
 
               if (!state.autoConfigApplied) {
                 // PDF: unpdf → mineru-cloud or mineru if server has it
@@ -1668,9 +1671,6 @@ export const useSettingsStore = create<SettingsState>()(
 
                 // TTS: select first server provider if current is not server-configured.
                 // Skip server-disabled entries — they are force-off, not selectable.
-                const serverTtsIds = Object.entries(data.tts)
-                  .filter(([, info]) => !info.disabled)
-                  .map(([id]) => id) as TTSProviderId[];
                 if (
                   serverTtsIds.length > 0 &&
                   !newTTSConfig[state.ttsProviderId]?.isServerConfigured
@@ -1678,11 +1678,6 @@ export const useSettingsStore = create<SettingsState>()(
                   autoTtsProvider = serverTtsIds[0];
                   autoTtsVoice =
                     DEFAULT_TTS_VOICES[autoTtsProvider as BuiltInTTSProviderId] || 'default';
-                }
-                // Auto-enable TTS on first run when a server provider exists
-                // (mirrors image/video). No provider ⇒ stays off + CTA.
-                if (serverTtsIds.length > 0 && !state.ttsEnabled) {
-                  autoTtsEnabled = true;
                 }
 
                 // ASR: select first server provider if current is not server-configured
@@ -1721,6 +1716,11 @@ export const useSettingsStore = create<SettingsState>()(
                 if (serverVideoIds.length > 0 && !state.videoGenerationEnabled) {
                   autoVideoEnabled = true;
                 }
+              }
+              // Server-managed TTS is authoritative. Keep the capability enabled
+              // even for older localStorage states that migrated with TTS off.
+              if (serverTtsIds.length > 0 && !state.ttsEnabled) {
+                autoTtsEnabled = true;
               }
 
               // (LLM first-load auto-select removed: the symmetric provider

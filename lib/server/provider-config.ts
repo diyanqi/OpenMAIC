@@ -282,6 +282,10 @@ function applyOpenAIImageFallback(
   yamlImageSection: Record<string, Partial<ServerProviderEntry>> | undefined,
 ): Record<string, ServerProviderEntry> {
   if (imageConfig[OPENAI_IMAGE_PROVIDER_ID]) return imageConfig;
+  // OPENAI_API_KEY is a convenience fallback only. If the operator explicitly
+  // configured any image provider (for example Agnes), do not also expose an
+  // implicit OpenAI Image provider that may point at an LLM-only gateway.
+  if (Object.keys(imageConfig).length > 0) return imageConfig;
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return imageConfig;

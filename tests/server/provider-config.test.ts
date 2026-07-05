@@ -437,6 +437,19 @@ pdf:
       expect(resolveImageBaseUrl('openai-image')).toBe('https://proxy.example.com/v1');
     });
 
+    it('does not add OpenAI image fallback when Agnes image is explicitly configured', async () => {
+      vi.stubEnv('OPENAI_API_KEY', 'sk-openai');
+      vi.stubEnv('OPENAI_BASE_URL', 'https://llm-only.example.com/v1');
+      vi.stubEnv('IMAGE_AGNES_API_KEY', 'agnes-key');
+      const { getServerImageProviders, resolveImageApiKey } =
+        await import('@/lib/server/provider-config');
+
+      const providers = getServerImageProviders();
+      expect(providers.agnes).toEqual({});
+      expect(providers['openai-image']).toBeUndefined();
+      expect(resolveImageApiKey('agnes')).toBe('agnes-key');
+    });
+
     it('maps IMAGE_OPENAI and exposes image baseUrl', async () => {
       vi.stubEnv('IMAGE_OPENAI_API_KEY', 'sk-openai-image');
       vi.stubEnv('IMAGE_OPENAI_BASE_URL', 'https://proxy.example.com/v1');

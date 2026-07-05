@@ -149,6 +149,11 @@ vi.mock('@/lib/media/image-providers', () => ({
       requiresApiKey: true,
       models: [{ id: 'qwen-image-max', name: 'Qwen Image Max' }],
     },
+    agnes: {
+      id: 'agnes',
+      requiresApiKey: true,
+      models: [{ id: 'agnes-image-2.1-flash', name: 'Agnes Image 2.1 Flash' }],
+    },
   },
 }));
 
@@ -927,6 +932,24 @@ describe('fetchServerProviders — Image stale selection', () => {
 
     expect(store.getState().imageProviderId).toBe('qwen-image');
     expect(store.getState().imageModelId).toBe('qwen-image-max');
+  });
+
+  it('moves stale OpenAI image selection to Agnes when the server exposes only Agnes', async () => {
+    const store = await getStore();
+
+    store.setState({
+      imageProviderId: 'openai-image',
+      imageModelId: 'gpt-image-2',
+      imageGenerationEnabled: true,
+      autoConfigApplied: true,
+    });
+
+    mockServerResponse({ image: { agnes: {} } });
+    await store.getState().fetchServerProviders();
+
+    expect(store.getState().imageProviderId).toBe('agnes');
+    expect(store.getState().imageModelId).toBe('agnes-image-2.1-flash');
+    expect(store.getState().imageGenerationEnabled).toBe(true);
   });
 
   it('auto-selects provider and model when server adds image provider after empty state', async () => {

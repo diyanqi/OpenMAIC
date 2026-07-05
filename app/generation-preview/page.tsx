@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, Suspense, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import { CheckCircle2, Sparkles, AlertCircle, AlertTriangle, ArrowLeft, Bot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -49,9 +49,41 @@ import { resolveTaskEngineModeFromOutlineDoneEvent } from './vocational-mode';
 const log = createLogger('GenerationPreview');
 const OUTLINE_REVIEW_AUTO_CONTINUE_MS = 2500;
 
+function resolveBrowserClassroomUrl(raw: string): string {
+  try {
+    const parsed = new URL(raw, window.location.origin);
+    parsed.protocol = window.location.protocol;
+    parsed.host = window.location.host;
+    return parsed.toString();
+  } catch {
+    return raw;
+  }
+}
+
+function generationStepIdForJobStep(step?: string): string {
+  switch (step) {
+    case 'generating_scenes':
+      return 'slide-content';
+    case 'generating_media':
+    case 'generating_tts':
+    case 'persisting':
+    case 'completed':
+      return 'actions';
+    case 'queued':
+    case 'initializing':
+    case 'researching':
+    case 'generating_outlines':
+    default:
+      return 'outline';
+  }
+}
+
 function GenerationPreviewContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { t } = useI18n();
+  const externalJobId = searchParams.get('inkcraftJobId') || searchParams.get('jobId') || '';
+  const isExternalJob = externalJobId.trim().length > 0;
   const hasStartedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const outlineReviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -143,6 +175,12 @@ function GenerationPreviewContent() {
   useEffect(() => {
     cleanupOldImages(24).catch((e) => log.error(e));
 
+    if (isExternalJob) {
+      setSession(null);
+      setSessionLoaded(true);
+      return;
+    }
+
     const saved = sessionStorage.getItem('generationSession');
     if (saved) {
       try {
@@ -163,7 +201,7 @@ function GenerationPreviewContent() {
       }
     }
     setSessionLoaded(true);
-  }, []);
+  }, [isExternalJob]);
 
   // Abort all in-flight requests on unmount
   useEffect(() => {
@@ -172,6 +210,70 @@ function GenerationPreviewContent() {
       clearOutlineReviewTimer();
     };
   }, []);
+
+  useEffect(() => {
+    if (!isExternalJob) return;
+
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    hasStartedRef.current = true;
+    setError(null);
+    setStatusMessage('正在创建视频课...');
+    setCurrentStepIndex(0);
+
+    const scheduleNext = (delayMs: number) => {
+      if (cancelled) return;
+      timeoutId = setTimeout(pollJob, delayMs);
+    };
+
+    const pollJob = async () => {
+      try {
+        const response = await fetch(
+          `/api/generate-classroom/${encodeURIComponent(externalJobId)}`,
+          {
+            cache: 'no-store',
+          },
+        );
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data?.success) {
+          throw new Error(data?.error || '获取视频课生成进度失败');
+        }
+        if (cancelled) return;
+
+        const nextStepId = generationStepIdForJobStep(data.step);
+        const nextStepIndex = Math.max(
+          0,
+          getActiveSteps(null).findIndex((step) => step.id === nextStepId),
+        );
+        setCurrentStepIndex(nextStepIndex);
+        setStatusMessage(data.message || '正在生成视频课...');
+
+        const classroomUrl = data.result?.url || data.classroomUrl;
+        if (classroomUrl) {
+          router.replace(resolveBrowserClassroomUrl(classroomUrl));
+          return;
+        }
+
+        if (data.done) {
+          setError(data.error || data.message || '视频课生成失败');
+          return;
+        }
+
+        scheduleNext(Number(data.pollIntervalMs) || 5000);
+      } catch {
+        if (cancelled) return;
+        setStatusMessage('正在等待视频课生成进度...');
+        scheduleNext(5000);
+      }
+    };
+
+    void pollJob();
+
+    return () => {
+      cancelled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [externalJobId, isExternalJob, router]);
 
   // Get API credentials from localStorage
   const getApiHeaders = () => {
@@ -208,6 +310,7 @@ function GenerationPreviewContent() {
 
   // Auto-start generation when session is loaded
   useEffect(() => {
+    if (isExternalJob) return;
     if (!session || hasStartedRef.current) return;
     const needsOutlines = !session.sceneOutlines || session.sceneOutlines.length === 0;
     const phase = session.previewPhase;
@@ -223,7 +326,7 @@ function GenerationPreviewContent() {
       startGeneration();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session]);
+  }, [isExternalJob, session]);
 
   // Main generation flow
   const startGeneration = async (sessionOverride?: GenerationSessionState) => {
@@ -1120,7 +1223,7 @@ function GenerationPreviewContent() {
   }
 
   // No session found
-  if (!session) {
+  if (!session && !isExternalJob) {
     return (
       <div className="min-h-[100dvh] w-full bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex items-center justify-center p-4">
         <Card className="p-8 max-w-md w-full">
@@ -1144,7 +1247,7 @@ function GenerationPreviewContent() {
       : ALL_STEPS[0];
   const activeStepText = getGenerationStepText(activeStep, session);
 
-  if (isReviewingOutlines) {
+  if (session && isReviewingOutlines) {
     const outlineStepIndex = Math.max(
       0,
       activeSteps.findIndex((step) => step.id === 'outline'),
@@ -1307,10 +1410,12 @@ function GenerationPreviewContent() {
                     >
                       <StepVisualizer
                         stepId={activeStep.id}
-                        outlines={session.sceneOutlines ?? streamingOutlines}
+                        outlines={session?.sceneOutlines ?? streamingOutlines}
                         webSearchSources={webSearchSources}
                         onExpandOutline={
-                          activeStep.id === 'outline' ? handleExpandStreamingOutline : undefined
+                          session && activeStep.id === 'outline'
+                            ? handleExpandStreamingOutline
+                            : undefined
                         }
                       />
                     </motion.div>

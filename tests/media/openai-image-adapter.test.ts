@@ -32,13 +32,12 @@ describe('openai-image-adapter', () => {
       'https://proxy.example.com/v1/images/generations',
       expect.objectContaining({
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: 'Bearer sk-test',
-        },
       }),
     );
-    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    const init = mockFetch.mock.calls[0][1];
+    expect(new Headers(init.headers).get('Authorization')).toBe('Bearer sk-test');
+    expect(new Headers(init.headers).get('Content-Type')).toBe('application/json');
+    const body = JSON.parse(init.body);
     expect(body).toEqual({
       model: 'gpt-image-2',
       prompt: 'a classroom diagram',
@@ -100,9 +99,36 @@ describe('openai-image-adapter', () => {
     });
 
     expect(mockFetch).toHaveBeenCalledWith('https://api.openai.com/v1/models/gpt-image-unknown', {
-      headers: { Authorization: 'Bearer sk-test' },
+      headers: expect.any(Headers),
     });
+    expect(new Headers(mockFetch.mock.calls[0][1].headers).get('Authorization')).toBe(
+      'Bearer sk-test',
+    );
     expect(result.success).toBe(false);
     expect(result.message).toBe('OpenAI Image model not found: gpt-image-unknown');
+  });
+
+  it('tries the next OpenAI image key on retryable failures', async () => {
+    mockFetch
+      .mockResolvedValueOnce(new Response('rate limited', { status: 429 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: [{ url: 'https://cdn.example.com/image.png' }] }), {
+          status: 200,
+        }),
+      );
+
+    const result = await generateWithOpenAIImage(
+      { providerId: 'openai-image', apiKey: 'sk-a,sk-b' },
+      { prompt: 'rotate key' },
+    );
+
+    expect(result.url).toBe('https://cdn.example.com/image.png');
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(new Headers(mockFetch.mock.calls[0][1].headers).get('Authorization')).toBe(
+      'Bearer sk-a',
+    );
+    expect(new Headers(mockFetch.mock.calls[1][1].headers).get('Authorization')).toBe(
+      'Bearer sk-b',
+    );
   });
 });

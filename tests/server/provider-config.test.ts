@@ -105,6 +105,15 @@ describe('provider-config', () => {
       expect(resolveApiKey('openai')).toBe('sk-server');
     });
 
+    it('keeps multi-key OpenAI env values server-side for request rotation', async () => {
+      vi.stubEnv('OPENAI_API_KEY', 'sk-a,sk-b');
+      const { getServerProviders, resolveApiKey } = await import('@/lib/server/provider-config');
+
+      expect(resolveApiKey('openai')).toBe('sk-a,sk-b');
+      expect(getServerProviders().openai).toEqual({});
+      expect((getServerProviders().openai as Record<string, unknown>).apiKey).toBeUndefined();
+    });
+
     it('returns empty string when neither client nor server key exists', async () => {
       const { resolveApiKey } = await import('@/lib/server/provider-config');
       expect(resolveApiKey('openai')).toBe('');

@@ -150,6 +150,7 @@ import { experimental_transcribe as transcribe } from 'ai';
 import type { ASRModelConfig } from './types';
 import { isCustomASRProvider } from './types';
 import { ASR_PROVIDERS } from './constants';
+import { createRotatingBearerAuthFetch, getFirstApiKey } from '@/lib/server/api-key-rotation';
 
 /**
  * Result of ASR transcription
@@ -299,8 +300,9 @@ async function transcribeOpenAIWhisper(
   audioBuffer: Buffer | Blob,
 ): Promise<ASRTranscriptionResult> {
   const openai = createOpenAI({
-    apiKey: config.apiKey!,
+    apiKey: getFirstApiKey(config.apiKey),
     baseURL: config.baseUrl || ASR_PROVIDERS['openai-whisper'].defaultBaseUrl,
+    fetch: createRotatingBearerAuthFetch('openai:asr', config.apiKey),
   });
 
   // Convert to Buffer or Uint8Array (which is required by the AI SDK)

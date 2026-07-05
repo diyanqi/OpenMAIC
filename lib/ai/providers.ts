@@ -41,6 +41,7 @@ import type {
 import { applyModelMetadata, getCatalogThinkingCapability } from './model-metadata';
 import { getDefaultThinkingConfig, getThinkingMode, pickThinkingBudget } from './thinking-config';
 import { createLogger } from '@/lib/logger';
+import { createRotatingBearerAuthFetch, getFirstApiKey } from '@/lib/server/api-key-rotation';
 // NOTE: Do NOT import thinking-context.ts here — it uses node:async_hooks
 // which is server-only, and this file is also used on the client via
 // settings.ts. The thinking context is read from globalThis instead
@@ -1468,7 +1469,7 @@ export function getModel(config: ModelConfig): ModelWithInfo {
   switch (providerType) {
     case 'openai': {
       const openaiOptions: Parameters<typeof createOpenAI>[0] = {
-        apiKey: effectiveApiKey,
+        apiKey: config.providerId === 'openai' ? getFirstApiKey(effectiveApiKey) : effectiveApiKey,
         baseURL: effectiveBaseUrl,
       };
 
@@ -1476,7 +1477,12 @@ export function getModel(config: ModelConfig): ModelWithInfo {
       // wrapper that injects vendor-specific thinking params into the HTTP
       // body. The thinking config is read from AsyncLocalStorage, set by
       // callLLM / streamLLM at call time.
-      if (config.providerId !== 'openai') {
+      if (config.providerId === 'openai') {
+        openaiOptions.fetch = createRotatingBearerAuthFetch(
+          `openai:${config.providerId}`,
+          effectiveApiKey,
+        );
+      } else {
         const providerId = config.providerId;
         const compatFetch = async (url: RequestInfo | URL, init?: RequestInit) => {
           // Read thinking config from globalThis (set by thinking-context.ts)

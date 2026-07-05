@@ -97,6 +97,7 @@ import { isCustomTTSProvider } from './types';
 import { TTS_PROVIDERS } from './constants';
 import { Communicate } from 'edge-tts-universal';
 import { splitConcatenatedJsonObjects } from './json-stream';
+import { fetchWithRotatingBearerAuth } from '@/lib/server/api-key-rotation';
 import {
   VOXCPM_VLLM_MODEL_ID,
   VOXCPM_AUTO_VOICE_ID,
@@ -243,19 +244,23 @@ async function generateOpenAITTS(
   const baseUrl = config.baseUrl || TTS_PROVIDERS['openai-tts'].defaultBaseUrl;
 
   // Use gpt-4o-mini-tts for best quality and intelligent realtime applications
-  const response = await fetch(`${baseUrl}/audio/speech`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${config.apiKey}`,
-      'Content-Type': 'application/json; charset=utf-8',
+  const response = await fetchWithRotatingBearerAuth(
+    'openai:tts',
+    config.apiKey,
+    `${baseUrl}/audio/speech`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+      },
+      body: JSON.stringify({
+        model: config.modelId || 'gpt-4o-mini-tts',
+        input: text,
+        voice: config.voice,
+        speed: config.speed || 1.0,
+      }),
     },
-    body: JSON.stringify({
-      model: config.modelId || 'gpt-4o-mini-tts',
-      input: text,
-      voice: config.voice,
-      speed: config.speed || 1.0,
-    }),
-  });
+  );
 
   if (!response.ok) {
     throwIfTtsRateLimited('OpenAI', response.status);

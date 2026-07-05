@@ -10,6 +10,7 @@ import type {
   ImageGenerationOptions,
   ImageGenerationResult,
 } from '../types';
+import { fetchWithRotatingBearerAuth } from '@/lib/server/api-key-rotation';
 
 const DEFAULT_MODEL = 'gpt-image-2';
 const DEFAULT_BASE_URL = 'https://api.openai.com/v1';
@@ -28,12 +29,12 @@ export async function testOpenAIImageConnectivity(
   const baseUrl = normalizeBaseUrl(config.baseUrl);
 
   try {
-    const response = await fetch(
+    const response = await fetchWithRotatingBearerAuth(
+      'openai:image-connectivity',
+      config.apiKey,
       `${baseUrl}/models/${encodeURIComponent(config.model || DEFAULT_MODEL)}`,
       {
-        headers: {
-          Authorization: `Bearer ${config.apiKey}`,
-        },
+        headers: {},
       },
     );
 
@@ -65,19 +66,23 @@ export async function generateWithOpenAIImage(
   const width = options.width || 1024;
   const height = options.height || 1024;
 
-  const response = await fetch(`${baseUrl}/images/generations`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.apiKey}`,
+  const response = await fetchWithRotatingBearerAuth(
+    'openai:image',
+    config.apiKey,
+    `${baseUrl}/images/generations`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: config.model || DEFAULT_MODEL,
+        prompt: options.prompt,
+        n: 1,
+        size: resolveSize(options),
+      }),
     },
-    body: JSON.stringify({
-      model: config.model || DEFAULT_MODEL,
-      prompt: options.prompt,
-      n: 1,
-      size: resolveSize(options),
-    }),
-  });
+  );
 
   if (!response.ok) {
     const text = await response.text().catch(() => response.statusText);

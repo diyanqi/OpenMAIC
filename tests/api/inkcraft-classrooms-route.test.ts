@@ -75,10 +75,24 @@ describe('POST /api/inkcraft/classrooms', () => {
     const url = new URL(json.classroomUrl);
     expect(url.origin).toBe('https://maic.inkcraft.cn');
     expect(url.pathname).toBe('/inkcraft/classroom-generator');
-    expect(url.searchParams.get('prompt')).toBe('写一个英语作文课');
-    expect(url.searchParams.get('userNickname')).toBe('Diyan');
-    expect(url.searchParams.get('webSearch')).toBe('1');
+    expect(url.searchParams.get('prompt')).toBeNull();
+    expect(url.searchParams.get('userNickname')).toBeNull();
+    expect(url.searchParams.get('webSearch')).toBeNull();
+    expect(url.searchParams.get('launchId')).toMatch(/^[a-zA-Z0-9_-]+$/);
     expect(json.url).toBe(json.classroomUrl);
+
+    const { GET } = await import('@/app/api/inkcraft/classroom-launch/[launchId]/route');
+    const launchRes = await GET({} as NextRequest, {
+      params: Promise.resolve({ launchId: url.searchParams.get('launchId')! }),
+    });
+    const launchJson = await launchRes.json();
+
+    expect(launchJson).toMatchObject({
+      success: true,
+      prompt: '写一个英语作文课',
+      userNickname: 'Diyan',
+      webSearch: true,
+    });
   });
 
   it('falls back to the Inkcraft MAIC domain when only localhost is visible server-side', async () => {
@@ -89,5 +103,28 @@ describe('POST /api/inkcraft/classrooms', () => {
     const json = await res.json();
 
     expect(new URL(json.classroomUrl).origin).toBe('https://maic.inkcraft.cn');
+  });
+
+  it('keeps the launch URL short for long prompts', async () => {
+    process.env.MAIC_PUBLIC_URL = 'https://maic.inkcraft.cn';
+    const longPrompt = '请基于这个主题创建视频课。'.repeat(500);
+
+    const res = await postInkcraftClassroom({
+      prompt: longPrompt,
+      user: 'u-3',
+    });
+    const json = await res.json();
+    const url = new URL(json.classroomUrl);
+
+    expect(json.classroomUrl.length).toBeLessThan(160);
+    expect(url.searchParams.get('prompt')).toBeNull();
+
+    const { GET } = await import('@/app/api/inkcraft/classroom-launch/[launchId]/route');
+    const launchRes = await GET({} as NextRequest, {
+      params: Promise.resolve({ launchId: url.searchParams.get('launchId')! }),
+    });
+    const launchJson = await launchRes.json();
+
+    expect(launchJson.prompt).toBe(longPrompt);
   });
 });

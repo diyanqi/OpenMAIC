@@ -11,6 +11,14 @@ import { cn } from '@/lib/utils';
 import type { GenerationSessionState } from '@/app/generation-preview/types';
 import type { UserRequirements } from '@/lib/types/generation';
 
+interface LaunchPayload {
+  prompt: string;
+  userNickname?: string;
+  webSearch?: boolean;
+  interactiveMode?: boolean;
+  taskEngineMode?: boolean;
+}
+
 function InkcraftClassroomGeneratorContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -19,28 +27,35 @@ function InkcraftClassroomGeneratorContent() {
 
   const initialPrompt = useMemo(() => searchParams.get('prompt') || '', [searchParams]);
   const [prompt, setPrompt] = useState(initialPrompt);
+  const [launchPayload, setLaunchPayload] = useState<LaunchPayload | null>(null);
+  const [error, setError] = useState('');
 
-  const buildRequirements = (): UserRequirements => {
-    const userNickname = searchParams.get('userNickname') || undefined;
+  const buildRequirements = (payload?: LaunchPayload): UserRequirements => {
+    const source = payload || {
+      prompt,
+      userNickname: searchParams.get('userNickname') || undefined,
+      webSearch: searchParams.get('webSearch') === '1',
+      interactiveMode:
+        searchParams.get('interactiveMode') === '1' || searchParams.get('taskEngineMode') === '1',
+      taskEngineMode: searchParams.get('taskEngineMode') === '1',
+    };
     return {
-      requirement: prompt.trim(),
-      ...(userNickname ? { userNickname } : {}),
-      ...(searchParams.get('webSearch') === '1' ? { webSearch: true } : {}),
-      ...(searchParams.get('interactiveMode') === '1' || searchParams.get('taskEngineMode') === '1'
-        ? { interactiveMode: true }
-        : {}),
-      ...(searchParams.get('taskEngineMode') === '1' ? { taskEngineMode: true } : {}),
+      requirement: source.prompt.trim(),
+      ...(source.userNickname ? { userNickname: source.userNickname } : {}),
+      ...(source.webSearch ? { webSearch: true } : {}),
+      ...(source.interactiveMode || source.taskEngineMode ? { interactiveMode: true } : {}),
+      ...(source.taskEngineMode ? { taskEngineMode: true } : {}),
     };
   };
 
-  const submit = () => {
-    const trimmed = prompt.trim();
+  const submit = (payload?: LaunchPayload) => {
+    const trimmed = (payload?.prompt ?? prompt).trim();
     if (!trimmed || submittedRef.current) return;
     submittedRef.current = true;
 
     const sessionState: GenerationSessionState = {
       sessionId: nanoid(),
-      requirements: buildRequirements(),
+      requirements: buildRequirements(payload),
       pdfText: '',
       pdfImages: [],
       imageStorageIds: [],
@@ -54,11 +69,50 @@ function InkcraftClassroomGeneratorContent() {
   };
 
   useEffect(() => {
+    const launchId = searchParams.get('launchId');
+    if (!launchId) return;
+
+    let cancelled = false;
+    fetch(`/api/inkcraft/classroom-launch/${encodeURIComponent(launchId)}`, {
+      cache: 'no-store',
+    })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data?.success) {
+          throw new Error(data?.error || 'Failed to load classroom prompt');
+        }
+        if (cancelled) return;
+
+        const payload: LaunchPayload = {
+          prompt: data.prompt || '',
+          ...(data.userNickname ? { userNickname: data.userNickname } : {}),
+          ...(data.webSearch === true ? { webSearch: true } : {}),
+          ...(data.interactiveMode === true ? { interactiveMode: true } : {}),
+          ...(data.taskEngineMode === true ? { taskEngineMode: true } : {}),
+        };
+        setPrompt(payload.prompt);
+        setLaunchPayload(payload);
+        submit(payload);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load prompt');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (searchParams.get('launchId')) return;
     if (!initialPrompt.trim()) return;
     const frame = requestAnimationFrame(() => submitButtonRef.current?.click());
     return () => cancelAnimationFrame(frame);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialPrompt]);
+  }, [initialPrompt, searchParams]);
+
+  const canSubmit = !!prompt.trim() && !submittedRef.current;
 
   return (
     <main className="flex min-h-[100dvh] w-full items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100 px-4 text-slate-950 dark:from-slate-950 dark:to-slate-900 dark:text-slate-50">
@@ -90,8 +144,8 @@ function InkcraftClassroomGeneratorContent() {
             <Button
               ref={submitButtonRef}
               type="button"
-              onClick={submit}
-              disabled={!prompt.trim() || submittedRef.current}
+              onClick={() => submit(launchPayload || undefined)}
+              disabled={!canSubmit}
               className={cn('h-8 gap-1.5 rounded-lg px-3 text-xs font-medium')}
             >
               Enter Classroom
@@ -99,6 +153,7 @@ function InkcraftClassroomGeneratorContent() {
             </Button>
           </div>
         </div>
+        {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
       </motion.div>
     </main>
   );

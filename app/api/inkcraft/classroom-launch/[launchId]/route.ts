@@ -22,7 +22,11 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ launch
 
     const launch = await readInkcraftClassroomLaunch(launchId);
     if (!launch) {
-      return apiError('INVALID_REQUEST', 404, 'Inkcraft classroom launch not found');
+      return apiError(
+        'INVALID_REQUEST',
+        404,
+        `Inkcraft classroom launch not found [launchId=${launchId}]`,
+      );
     }
 
     return apiSuccess({

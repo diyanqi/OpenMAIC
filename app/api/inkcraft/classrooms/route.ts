@@ -105,6 +105,11 @@ export async function POST(req: NextRequest) {
     const launchUrl = await buildLaunchUrl(req, body);
     if (launchUrl instanceof Response) return launchUrl;
 
+    log.info(
+      `Inkcraft classroom launch created [host=${req.headers.get('host') ?? 'unknown'} ` +
+        `forwardedHost=${req.headers.get('x-forwarded-host') ?? 'unknown'} classroomUrl=${launchUrl}]`,
+    );
+
     return apiSuccess(
       {
         status: 'ready',

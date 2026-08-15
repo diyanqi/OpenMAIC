@@ -15,6 +15,18 @@ MAIC_PUBLIC_URL=https://<maic-host>
 DEFAULT_MODEL=...
 ```
 
+OpenMAIC and Inkcraft can run on different hosts: Inkcraft only calls the
+OpenMAIC API server-to-server, then the browser is sent to OpenMAIC's
+`classroomUrl`. The important constraint is that the OpenMAIC instance which
+receives `POST /api/inkcraft/classrooms` must be the same instance (or share the
+same `data` storage) that the browser later reads from. To make that work:
+
+- Set `MAIC_PUBLIC_URL` (or `INKCRAFT_CLASSROOM_FRONTEND_URL`) to the public,
+  browser-reachable origin of this OpenMAIC deployment.
+- Have Inkcraft call OpenMAIC's public URL, not `localhost` or an internal host.
+- Keep `/app/data` persistent across restarts and share it between OpenMAIC
+  replicas; launch records are stored in `data/inkcraft-classroom-launches/`.
+
 Register this OAuth redirect URI in Inkcraft:
 
 ```text

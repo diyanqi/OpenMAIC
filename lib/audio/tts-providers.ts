@@ -213,10 +213,31 @@ async function generateEdgeTTS(config: TTSModelConfig, text: string): Promise<TT
   });
   const chunks: Uint8Array[] = [];
 
-  for await (const chunk of communicate.stream()) {
-    if (chunk.type === 'audio' && chunk.data) {
-      chunks.push(new Uint8Array(chunk.data));
+  // edge-tts-universal only awaits the WebSocket 'open' event and ignores
+  // 'error'/'close' there, so a blocked/unreachable endpoint (or a stream that
+  // never emits 'turn.end') hangs forever — the request never returns and the
+  // client sits on the generation step. Race the stream against a hard deadline
+  // so we fail fast instead of hanging.
+  const collect = (async () => {
+    for await (const chunk of communicate.stream()) {
+      if (chunk.type === 'audio' && chunk.data) {
+        chunks.push(new Uint8Array(chunk.data));
+      }
     }
+  })();
+
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new Error(`Edge TTS timed out after ${EDGE_TTS_TIMEOUT_MS}ms`)),
+      EDGE_TTS_TIMEOUT_MS,
+    );
+  });
+
+  try {
+    await Promise.race([collect, deadline]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
 
   const total = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);

@@ -1261,15 +1261,89 @@ export interface ModelWithInfo {
   modelInfo: ModelInfo | null;
 }
 
+/**
+ * Body params used to switch thinking/reasoning off when a model has no catalog
+ * thinking adapter (so no per-vendor payload can be inferred). Operators can
+ * override the exact shape with `LLM_THINKING_DISABLED_BODY` (a JSON object) —
+ * needed for gateways that only accept a reduced `reasoning_effort`, e.g.
+ * CommandCode's Provider API, which rejects `none` and ignores DeepSeek's
+ * native `thinking.type`.
+ */
+const DEFAULT_DISABLE_THINKING_BODY: Record<string, unknown> = {
+  thinking: { type: 'disabled' },
+  reasoning_effort: 'low',
+};
+
+function getConfiguredDisableThinkingBody(): Record<string, unknown> {
+  const raw = process.env.LLM_THINKING_DISABLED_BODY;
+  if (!raw?.trim()) return DEFAULT_DISABLE_THINKING_BODY;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+    log.warn('LLM_THINKING_DISABLED_BODY must be a JSON object; ignoring.');
+  } catch (error) {
+    log.warn('LLM_THINKING_DISABLED_BODY is not valid JSON; ignoring.', error);
+  }
+  return DEFAULT_DISABLE_THINKING_BODY;
+}
+
+/** Read the per-request ThinkingConfig the AI SDK call registered (server-only). */
+function readThinkingContext(): ThinkingConfig | undefined {
+  const thinkingCtx = (globalThis as Record<string, unknown>).__thinkingContext as
+    | { getStore?: () => unknown }
+    | undefined;
+  return thinkingCtx?.getStore?.() as ThinkingConfig | undefined;
+}
+
+/**
+ * Merge thinking body params into a JSON chat-completions request. Used by both
+ * the OpenAI-compatible fetch wrapper and native OpenAI routing (which may point
+ * at an OpenAI-compatible gateway).
+ */
+function applyThinkingBodyParams(
+  init: RequestInit | undefined,
+  providerId: ProviderId,
+  modelId: string,
+  thinking: ThinkingConfig | undefined,
+): RequestInit | undefined {
+  if (!thinking || !init?.body || typeof init.body !== 'string') return init;
+
+  const extra = getCompatThinkingBodyParams(providerId, modelId, thinking);
+  if (!extra) return init;
+
+  try {
+    const body = JSON.parse(init.body);
+    if (providerId === 'lemonade' && 'stream_options' in body) {
+      delete body.stream_options;
+    }
+    Object.assign(body, extra);
+    return { ...init, body: JSON.stringify(body) };
+  } catch {
+    /* leave body as-is */
+    return init;
+  }
+}
+
 function getCompatThinkingBodyParams(
   providerId: ProviderId,
   modelId: string,
   config: ThinkingConfig,
 ): Record<string, unknown> | undefined {
   const capability = getCatalogThinkingCapability(providerId, modelId);
-  if (!capability || capability.control === 'none') return undefined;
-
   const mode = getThinkingMode(config);
+
+  // Models with no catalog thinking adapter (custom/uncatalogued OpenAI-compatible
+  // models — e.g. a gateway serving "deepseek/deepseek-v4.1-flash" through the
+  // OpenAI endpoint) still honor a global disable so operators can trade
+  // reasoning quality for latency on every model. Fixed-thinking
+  // (`control: 'none'`) models are left untouched.
+  if (!capability) {
+    return mode === 'disabled' ? getConfiguredDisableThinkingBody() : undefined;
+  }
+  if (capability.control === 'none') return undefined;
+
   const budget = pickThinkingBudget(capability, config);
 
   switch (capability.requestAdapter) {
@@ -1473,43 +1547,31 @@ export function getModel(config: ModelConfig): ModelWithInfo {
         baseURL: effectiveBaseUrl,
       };
 
-      // For OpenAI-compatible providers (not native OpenAI), add a fetch
-      // wrapper that injects vendor-specific thinking params into the HTTP
-      // body. The thinking config is read from AsyncLocalStorage, set by
-      // callLLM / streamLLM at call time.
+      // The thinking config is read from AsyncLocalStorage, set by callLLM /
+      // streamLLM at call time. Injecting into the HTTP body covers
+      // OpenAI-compatible providers, plus the global disable for uncatalogued
+      // models even on native-OpenAI routing (whose base URL may in fact point
+      // at an OpenAI-compatible gateway).
       if (config.providerId === 'openai') {
-        openaiOptions.fetch = createRotatingBearerAuthFetch(
+        const rotating = createRotatingBearerAuthFetch(
           `openai:${config.providerId}`,
           effectiveApiKey,
         );
+        openaiOptions.fetch = (async (url: RequestInfo | URL, init?: RequestInit) =>
+          rotating(
+            url,
+            applyThinkingBodyParams(init, config.providerId, config.modelId, readThinkingContext()),
+          )) as typeof globalThis.fetch;
       } else {
         const providerId = config.providerId;
         const compatFetch = async (url: RequestInfo | URL, init?: RequestInit) => {
           // Read thinking config from globalThis (set by thinking-context.ts)
-          const thinkingCtx = (globalThis as Record<string, unknown>).__thinkingContext as
-            | { getStore?: () => unknown }
-            | undefined;
-          const thinkingFromContext = thinkingCtx?.getStore?.() as ThinkingConfig | undefined;
           const thinking =
-            thinkingFromContext ??
+            readThinkingContext() ??
             (providerId === 'lemonade'
               ? getDefaultThinkingConfig(getCatalogThinkingCapability(providerId, config.modelId))
               : undefined);
-          if (thinking && init?.body && typeof init.body === 'string') {
-            const extra = getCompatThinkingBodyParams(providerId, config.modelId, thinking);
-            if (extra) {
-              try {
-                const body = JSON.parse(init.body);
-                if (providerId === 'lemonade' && 'stream_options' in body) {
-                  delete body.stream_options;
-                }
-                Object.assign(body, extra);
-                init = { ...init, body: JSON.stringify(body) };
-              } catch {
-                /* leave body as-is */
-              }
-            }
-          }
+          init = applyThinkingBodyParams(init, providerId, config.modelId, thinking);
           const response = await globalThis.fetch(url, init);
 
           // Recover reasoning that @ai-sdk/openai's chat schema drops: rewrite

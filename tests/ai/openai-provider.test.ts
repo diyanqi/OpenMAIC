@@ -297,6 +297,50 @@ describe('OpenAI provider defaults', () => {
     });
   });
 
+  it('uses the catalogued adapter (not the fallback) for known models', async () => {
+    const body = await captureInjectedRequestBody('deepseek', 'deepseek-v4-pro', {
+      mode: 'disabled',
+    });
+    expect(body).toMatchObject({ thinking: { type: 'disabled' } });
+    expect(body).not.toHaveProperty('reasoning_effort');
+  });
+
+  it('disables thinking for an uncatalogued model on the OpenAI endpoint', async () => {
+    const body = await captureInjectedRequestBody('openai', 'deepseek/deepseek-v4.1-flash', {
+      mode: 'disabled',
+    });
+
+    expect(body).toMatchObject({
+      thinking: { type: 'disabled' },
+      reasoning_effort: 'low',
+    });
+  });
+
+  it('leaves an uncatalogued model untouched unless thinking is disabled', async () => {
+    const body = await captureInjectedRequestBody('openai', 'deepseek/deepseek-v4.1-flash', {
+      mode: 'enabled',
+    });
+
+    expect(body).not.toHaveProperty('thinking');
+    expect(body).not.toHaveProperty('reasoning_effort');
+  });
+
+  it('honors an LLM_THINKING_DISABLED_BODY override for uncatalogued models', async () => {
+    const original = process.env.LLM_THINKING_DISABLED_BODY;
+    process.env.LLM_THINKING_DISABLED_BODY = '{"reasoning_effort":"low"}';
+    try {
+      const body = await captureInjectedRequestBody('openai', 'gateway/unknown-model', {
+        mode: 'disabled',
+      });
+
+      expect(body).toMatchObject({ reasoning_effort: 'low' });
+      expect(body).not.toHaveProperty('thinking');
+    } finally {
+      if (original === undefined) delete process.env.LLM_THINKING_DISABLED_BODY;
+      else process.env.LLM_THINKING_DISABLED_BODY = original;
+    }
+  });
+
   it('strips unsupported Lemonade stream_options while preserving thinking overrides', async () => {
     const originalFetch = globalThis.fetch;
     const globalRecord = globalThis as Record<string, unknown>;

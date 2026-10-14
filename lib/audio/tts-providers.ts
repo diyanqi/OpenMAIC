@@ -95,7 +95,7 @@
 import type { TTSModelConfig } from './types';
 import { isCustomTTSProvider } from './types';
 import { TTS_PROVIDERS } from './constants';
-import { Communicate } from 'edge-tts-universal';
+import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
 import { splitConcatenatedJsonObjects } from './json-stream';
 import { fetchWithRotatingBearerAuth } from '@/lib/server/api-key-rotation';
 import {
@@ -197,7 +197,8 @@ export async function generateTTS(
   }
 }
 
-const EDGE_TTS_TIMEOUT_MS = 25000;
+const EDGE_TTS_CONNECTION_TIMEOUT_MS = 15_000;
+const EDGE_TTS_SYNTHESIS_TIMEOUT_MS = 30_000;
 
 function speedToEdgeRate(speed: number | undefined): string {
   const normalized = Math.min(2, Math.max(0.5, speed || 1));
@@ -206,53 +207,36 @@ function speedToEdgeRate(speed: number | undefined): string {
 }
 
 async function generateEdgeTTS(config: TTSModelConfig, text: string): Promise<TTSGenerationResult> {
-  const communicate = new Communicate(text, {
-    voice: config.voice || 'zh-CN-XiaoxiaoNeural',
-    rate: speedToEdgeRate(config.speed),
-    connectionTimeout: EDGE_TTS_TIMEOUT_MS,
-  });
-  const chunks: Uint8Array[] = [];
-
-  // edge-tts-universal only awaits the WebSocket 'open' event and ignores
-  // 'error'/'close' there, so a blocked/unreachable endpoint (or a stream that
-  // never emits 'turn.end') hangs forever — the request never returns and the
-  // client sits on the generation step. Race the stream against a hard deadline
-  // so we fail fast instead of hanging.
-  const collect = (async () => {
-    for await (const chunk of communicate.stream()) {
-      if (chunk.type === 'audio' && chunk.data) {
-        chunks.push(new Uint8Array(chunk.data));
-      }
-    }
-  })();
-
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  const deadline = new Promise<never>((_, reject) => {
-    timeoutId = setTimeout(
-      () => reject(new Error(`Edge TTS timed out after ${EDGE_TTS_TIMEOUT_MS}ms`)),
-      EDGE_TTS_TIMEOUT_MS,
-    );
+  // msedge-tts (the client behind DejavuMoe/edgeTTS) replaces edge-tts-universal,
+  // which awaited only the WebSocket 'open' event and ignored 'error'/'close' —
+  // so any upstream rejection (403/429) hung the request forever. msedge-tts
+  // surfaces those errors and enforces its own connection + idle deadlines.
+  const tts = new MsEdgeTTS({
+    connectionTimeoutMs: EDGE_TTS_CONNECTION_TIMEOUT_MS,
+    synthesisTimeoutMs: EDGE_TTS_SYNTHESIS_TIMEOUT_MS,
   });
 
   try {
-    await Promise.race([collect, deadline]);
+    await tts.setMetadata(
+      config.voice || 'zh-CN-XiaoxiaoNeural',
+      OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3,
+    );
+    const { audioStream } = tts.toStream(text, { rate: speedToEdgeRate(config.speed) });
+
+    const chunks: Buffer[] = [];
+    for await (const chunk of audioStream as AsyncIterable<Buffer>) {
+      chunks.push(chunk);
+    }
+
+    const audio = Buffer.concat(chunks);
+    if (audio.byteLength === 0) {
+      throw new Error('Edge TTS returned no audio');
+    }
+
+    return { audio, format: 'mp3' };
   } finally {
-    if (timeoutId) clearTimeout(timeoutId);
+    tts.close();
   }
-
-  const total = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
-  if (total === 0) {
-    throw new Error('Edge TTS returned no audio');
-  }
-
-  const audio = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    audio.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-
-  return { audio, format: 'mp3' };
 }
 
 /**
